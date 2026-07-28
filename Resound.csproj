@@ -1,0 +1,83 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Resound</AssemblyName>
+    <RootNamespace>Resound</RootNamespace>
+    <Nullable>disable</Nullable>
+    <Authors>20fpsguy</Authors>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
+    <Configurations>Debug;Release</Configurations>
+    <Version>$(AssemblyVersion)</Version>
+    <LangVersion>latest</LangVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>D:\SPT dev\BepInEx\core\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="spt-common">
+      <HintPath>D:\SPT dev\BepInEx\plugins\spt\spt-common.dll</HintPath>
+    </Reference>
+    <Reference Include="spt-reflection">
+      <HintPath>D:\SPT dev\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>D:\SPT dev\BepInEx\core\BepInEx.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="sounds\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Auto-deploy to a local SPT install. Skipped when that path does not exist, so cloning
+       and building this repo works without having SPT at the same location. -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('D:\SPT dev\BepInEx\plugins')">
+    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;D:\SPT dev\BepInEx\plugins\$(TargetFileName)&quot;" />
+    <MakeDir Directories="D:\SPT dev\BepInEx\plugins\Resound" />
+    <Exec Command="xcopy /E /I /Y &quot;$(ProjectDir)sounds&quot; &quot;D:\SPT dev\BepInEx\plugins\Resound\sounds&quot;" />
+  </Target>
+
+  <Target Name="PackageModForDistribution" AfterTargets="Build">
+    <PropertyGroup>
+      <ModName>$(AssemblyName)</ModName>
+      <ZipFileName>$(ModName).zip</ZipFileName>
+      <TempPackageDir>$(ProjectDir)obj\Package</TempPackageDir>
+      <ModPackageDir>$(TempPackageDir)\BepInEx\plugins</ModPackageDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- Ship the audio with the mod so it works on install with nothing for the user to do. -->
+      <SoundFiles Include="$(ProjectDir)sounds\**\*.*" />
+    </ItemGroup>
+    <Message Text="--- Starting Mod packaging for distribution ---" Importance="high" />
+    <RemoveDir Directories="$(TempPackageDir)" />
+    <MakeDir Directories="$(ModPackageDir)\Resound" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModPackageDir)" />
+    <Copy SourceFiles="@(SoundFiles)"
+          DestinationFolder="$(ModPackageDir)\Resound\sounds\%(RecursiveDir)" />
+    <ZipDirectory SourceDirectory="$(TempPackageDir)" DestinationFile="$(ProjectDir)$(ZipFileName)" Overwrite="true" />
+    <RemoveDir Directories="$(TempPackageDir)" />
+    <Message Text="--- Mod packaged: $(ProjectDir)$(ZipFileName) (@(SoundFiles->Count()) sound file(s) included) ---" Importance="high" />
+  </Target>
+
+</Project>
+

@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+*.zip
+
+# Visual Studio local state
+.vs/
+*.user
+*.suo
+
+# Audio is NOT in this repo.
+#
+# The wavs are ripped from Black Ops 2 and CS2 and are not mine to redistribute here.
+# They ship in the release build only. Keeping them out of git also keeps them out of
+# history, which is the part that cannot be undone later.
+#
+# mapping.json IS tracked: it is my own work and the mod needs it to build.
+sounds/**/*.wav
+sounds/**/*.mp3
+sounds/**/*.flac
+
+# The hub page, not needed by anyone building from source
+MODPAGE.md
+
+# Local scratch
+_export/
+*.user
