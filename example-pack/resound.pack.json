@@ -1,0 +1,51 @@
+{
+  "id": "examplepack",
+  "name": "Example Pack",
+  "author": "you",
+  "apiVersion": 1,
+  "priority": 0,
+
+  "entries": [
+    {
+      "name": "One exact weapon",
+      "match": { "templateId": "6183afd850224f204c1da514" },
+      "soundSet": "myscar",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.3,
+      "enabled": true
+    },
+    {
+      "name": "Several weapons sharing one set",
+      "match": {
+        "templateIds": [
+          "668fe5a998b5ad715703ddd6",
+          "669fa39b48fc9f8db6035a0c",
+          "669fa3f88abd2662d80eee77"
+        ]
+      },
+      "soundSet": "mydeagle",
+      "enabled": true
+    },
+    {
+      "name": "Every pistol, whatever it is",
+      "match": { "weapClass": "pistol" },
+      "soundSet": "mypistol",
+      "enabled": false
+    },
+    {
+      "name": "Every 7.62x51 rifle",
+      "match": { "weapClass": "assaultRifle", "caliber": "Caliber762x51" },
+      "soundSet": "mybattlerifle",
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "decayBeats": 8,
+      "enabled": false
+    },
+    {
+      "name": "Anything whose internal name looks like an AK",
+      "match": { "namePattern": "weapon_.*ak(74|103|104|105)" },
+      "soundSet": "myak",
+      "enabled": false
+    }
+  ]
+}
