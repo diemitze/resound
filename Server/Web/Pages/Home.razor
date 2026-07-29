@@ -1,0 +1,172 @@
+@page "/resound"
+@layout MainLayout
+@inject ResoundService Resound
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pt-6">
+
+    @* Each tile says what it counts and what that means; a bare number is a riddle. *@
+    <MudGrid Spacing="3" Class="mb-5 rs-in" style="--d:0s">
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4 rs-card" Elevation="0" Style="border: 1px solid #2A2A30; height: 100%;">
+                <div class="d-flex align-center mb-1">
+                    <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Small"
+                             Style="color:#6E6E76;" Class="mr-2"/>
+                    <MudText Typo="Typo.body2" Style="color: #9A9AA2;">Sound packs</MudText>
+                </div>
+                <MudText Typo="Typo.h4" Class="rs-stat" Style="animation-delay:.10s">@_packs.Count</MudText>
+                <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                    installed, including the sounds shipped with Resound
+                </MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4 rs-card" Elevation="0" Style="border: 1px solid #2A2A30; height: 100%;">
+                <div class="d-flex align-center mb-1">
+                    <MudIcon Icon="@Icons.Material.Outlined.GraphicEq" Size="Size.Small"
+                             Style="color:#F0A202;" Class="mr-2"/>
+                    <MudText Typo="Typo.body2" Style="color: #9A9AA2;">Weapons with new sounds</MudText>
+                </div>
+                <MudText Typo="Typo.h4" Class="rs-stat" Style="animation-delay:.18s; color:#F0A202;">@_changed</MudText>
+                <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                    of @_total in the game, the other @(_total - _changed) stay vanilla
+                </MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4 rs-card" Elevation="0"
+                      Style="@($"border: 1px solid {(Resound.Config.Overrides.Count > 0 ? "#F0A202" : "#2A2A30")}; height: 100%;")">
+                <div class="d-flex align-center mb-1">
+                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small"
+                             Style="color:#6E6E76;" Class="mr-2"/>
+                    <MudText Typo="Typo.body2" Style="color: #9A9AA2;">Pinned by hand</MudText>
+                </div>
+                <MudText Typo="Typo.h4" Class="rs-stat" Style="animation-delay:.26s">@Resound.Config.Overrides.Count</MudText>
+                <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                    weapons you set yourself, ignoring the choice below
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-6 mb-4 rs-in" Elevation="0" Style="--d:.08s; border: 1px solid #2A2A30;">
+        <MudText Typo="Typo.h5">Which pack do you want to hear?</MudText>
+        <MudText Typo="Typo.body2" Style="color: #9A9AA2;" Class="mt-1 mb-4">
+            The global answer. Individual weapons can still be pinned to something else.
+        </MudText>
+
+        @* MudRadioGroup lays its children inline, which squeezed the packs side by side.
+           Forcing the rows to block gives each pack a readable line of its own. *@
+        <MudRadioGroup T="string" Value="@Resound.Config.ActivePack" ValueChanged="OnActivePackChanged"
+                       Style="width: 100%; display: block;">
+            <MudPaper Class="@PickCss(AutoId)" Elevation="0" Style="@RowStyle(AutoId)"
+                      @onclick="() => OnActivePackChanged(AutoId)">
+                <MudRadio T="string" Value="@AutoId" Color="Color.Primary" Dense="true">
+                    <MudText Typo="Typo.body1">Auto</MudText>
+                    <MudText Typo="Typo.caption" Style="color: #9A9AA2;">
+                        Every pack competes, highest priority first. Recommended.
+                    </MudText>
+                </MudRadio>
+            </MudPaper>
+
+            @foreach (var pack in _packs)
+            {
+                <MudPaper Class="@PickCss(pack.Id)" Elevation="0" Style="@RowStyle(pack.Id)"
+                          @onclick="() => OnActivePackChanged(pack.Id)">
+                    <MudRadio T="string" Value="@pack.Id" Color="Color.Primary" Dense="true">
+                        <MudText Typo="Typo.body1">
+                            @pack.Display
+                            @if (pack.Id == ResoundService.BuiltinId)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">shipped</MudChip>
+                            }
+                        </MudText>
+                        <MudText Typo="Typo.caption" Style="color: #9A9AA2;">
+                            @pack.Entries weapon rules
+                            @if (!string.IsNullOrEmpty(pack.Author))
+                            {
+                                <span> &middot; by @pack.Author</span>
+                            }
+                        </MudText>
+                    </MudRadio>
+                </MudPaper>
+            }
+        </MudRadioGroup>
+
+        @if (_packs.Count <= 1)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mt-4">
+                No add-on packs installed. Resound looks for a <span class="rs-mono">resound.pack.json</span>
+                anywhere under <span class="rs-mono">BepInEx/plugins</span>.
+            </MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Style="color: #6E6E76;" Class="mt-3 d-block">
+                Choosing one pack ignores the others. The shipped sounds still cover anything it
+                does not include, so nothing drops back to stock Tarkov by accident.
+            </MudText>
+        }
+    </MudPaper>
+
+    <MudPaper Class="pa-6 rs-in rs-card" Elevation="0" Style="--d:.16s; border: 1px solid #2A2A30;">
+        <div class="d-flex align-center flex-wrap gap-3">
+            <div style="min-width: 260px;">
+                <MudText Typo="Typo.h5">Fine control</MudText>
+                <MudText Typo="Typo.body2" Style="color: #9A9AA2;" Class="mt-1">
+                    See exactly which gun plays what, and pin individual weapons to a pack or back
+                    to the vanilla sound.
+                </MudText>
+            </div>
+            <MudSpacer/>
+            <MudButton Href="/resound/weapons" Variant="Variant.Outlined" Color="Color.Primary"
+                       EndIcon="@Icons.Material.Filled.ArrowForward">Per weapon</MudButton>
+        </div>
+    </MudPaper>
+
+</MudContainer>
+
+@code {
+    [CascadingParameter] private MainLayout? Layout { get; set; }
+
+    private const string AutoId = "Auto";
+
+    private List<PackRow> _packs = new();
+    private int _total;
+    private int _changed;
+
+    protected override void OnInitialized()
+    {
+        _packs = Resound.GetPacks();
+        Recount();
+    }
+
+    private void Recount()
+    {
+        var weapons = Resound.GetWeapons();
+        _total = weapons.Count;
+        _changed = weapons.Count(w => Resound.Resolve(w, _packs).Source != SoundSource.Vanilla);
+    }
+
+    private string PickCss(string id)
+    {
+        var on = string.Equals(Resound.Config.ActivePack, id, StringComparison.OrdinalIgnoreCase);
+        return on ? "pa-3 mb-2 rs-pick rs-pick-on" : "pa-3 mb-2 rs-pick";
+    }
+
+    private string RowStyle(string id)
+    {
+        var selected = string.Equals(Resound.Config.ActivePack, id, StringComparison.OrdinalIgnoreCase);
+        return selected
+            ? "display: block; width: 100%; border: 1px solid #F0A202; background: #1F1B14;"
+            : "display: block; width: 100%; border: 1px solid #2A2A30;";
+    }
+
+    private void OnActivePackChanged(string value)
+    {
+        Resound.Config.ActivePack = value;
+        Recount();
+        Layout?.MarkDirty();
+    }
+}

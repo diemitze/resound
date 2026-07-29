@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -14,43 +15,49 @@ namespace Resound.Audio
         public AudioClip[] TailSilenced;
         public AudioClip[] DoubletSilenced;
 
+        // Reload and foley, keyed by BSG's animator event name (SndMagOut, SndBoltIn, …).
+        public Dictionary<string, AudioClip[]> Events;
+
         public bool IsEmpty
         {
             get
             {
                 return Body == null && Tail == null && Doublet == null &&
-                       BodySilenced == null && TailSilenced == null && DoubletSilenced == null;
+                       BodySilenced == null && TailSilenced == null && DoubletSilenced == null &&
+                       (Events == null || Events.Count == 0);
             }
+        }
+
+        public AudioClip[] Event(string eventName)
+        {
+            if (Events == null || string.IsNullOrEmpty(eventName))
+                return null;
+
+            Events.TryGetValue(eventName, out AudioClip[] clips);
+            return clips;
         }
     }
 
     internal static class ClipLibrary
     {
         private static readonly Dictionary<string, SoundSet> Cache =
-            new Dictionary<string, SoundSet>(System.StringComparer.OrdinalIgnoreCase);
+            new Dictionary<string, SoundSet>(StringComparer.OrdinalIgnoreCase);
 
         // Counts files only. AudioClip.Create during plugin Awake returns zero-length
         // clips that cache as successful and play nothing, so clips are built on first use.
-        public static void Scan(string soundsRoot, IEnumerable<string> setNames)
+        public static int Scan(string setDir)
         {
-            foreach (string name in setNames)
+            if (string.IsNullOrEmpty(setDir) || !Directory.Exists(setDir))
             {
-                if (string.IsNullOrEmpty(name))
-                    continue;
-
-                string dir = Path.Combine(soundsRoot, name);
-                if (!Directory.Exists(dir))
-                {
-                    Plugin.Log.LogWarning("Sound set folder missing: " + dir);
-                    continue;
-                }
-
-                int count = Directory.GetFiles(dir, "*.wav", SearchOption.AllDirectories).Length;
-                if (count == 0)
-                    Plugin.Log.LogWarning("Sound set '" + name + "' has no .wav files: " + dir);
-                else
-                    Plugin.Log.LogInfo("Found set '" + name + "': " + count + " .wav file(s)");
+                Plugin.Log.LogWarning("Sound set folder missing: " + setDir);
+                return 0;
             }
+
+            int count = Directory.GetFiles(setDir, "*.wav", SearchOption.AllDirectories).Length;
+            if (count == 0)
+                Plugin.Log.LogWarning("Sound set has no .wav files: " + setDir);
+
+            return count;
         }
 
         // A dead clip is a "fake null" the play path silently drops, so check rather than trust.
@@ -70,36 +77,58 @@ namespace Resound.Audio
 
         private static bool Alive(SoundSet s)
         {
-            return s != null && Alive(s.Body) && Alive(s.Tail) && Alive(s.Doublet) &&
-                   Alive(s.BodySilenced) && Alive(s.TailSilenced) && Alive(s.DoubletSilenced);
+            if (s == null || !Alive(s.Body) || !Alive(s.Tail) || !Alive(s.Doublet) ||
+                !Alive(s.BodySilenced) || !Alive(s.TailSilenced) || !Alive(s.DoubletSilenced))
+                return false;
+
+            if (s.Events != null)
+            {
+                foreach (AudioClip[] clips in s.Events.Values)
+                {
+                    if (!Alive(clips))
+                        return false;
+                }
+            }
+
+            return true;
         }
 
-        public static SoundSet Get(string soundsRoot, string setName)
+        // Keyed on the full directory, not the set name, or two packs shipping a set called
+        // m4a1 would silently share one another's clips.
+        public static SoundSet Get(string setDir)
         {
-            if (Cache.TryGetValue(setName, out SoundSet cached))
+            if (string.IsNullOrEmpty(setDir))
+                return null;
+
+            if (Cache.TryGetValue(setDir, out SoundSet cached))
             {
                 if (Alive(cached))
                     return cached;
 
-                Plugin.Log.LogWarning("Clips for '" + setName + "' were unloaded by the engine; reloading.");
-                Cache.Remove(setName);
+                Plugin.Log.LogWarning("Clips for '" + setDir + "' were unloaded by the engine; reloading.");
+                Cache.Remove(setDir);
             }
 
             SoundSet set = null;
             try
             {
-                set = LoadFrom(Path.Combine(soundsRoot, setName));
+                set = LoadFrom(setDir);
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
-                Plugin.Log.LogWarning("Loading set '" + setName + "' failed: " + e.Message);
+                Plugin.Log.LogWarning("Loading set '" + setDir + "' failed: " + e.Message);
             }
 
             // Only cache successes so a failed load can recover on the next shot.
             if (set != null)
-                Cache[setName] = set;
+                Cache[setDir] = set;
 
             return set;
+        }
+
+        public static void Forget()
+        {
+            Cache.Clear();
         }
 
         private static SoundSet LoadFrom(string dir)
@@ -117,7 +146,8 @@ namespace Resound.Audio
                 Doublet = LoadFolder(Path.Combine(dir, "doublet")),
                 BodySilenced = LoadFolder(Path.Combine(dir, "body_silenced")),
                 TailSilenced = LoadFolder(Path.Combine(dir, "tail_silenced")),
-                DoubletSilenced = LoadFolder(Path.Combine(dir, "doublet_silenced"))
+                DoubletSilenced = LoadFolder(Path.Combine(dir, "doublet_silenced")),
+                Events = LoadEvents(Path.Combine(dir, "events"))
             };
 
             // Loose wavs in the set folder count as the body.
@@ -125,8 +155,10 @@ namespace Resound.Audio
                 set.Body = LoadFolder(dir);
 
             // Fall back to unsuppressed, not vanilla, or fitting a can flips the gun back.
+            // Tail is deliberately excluded: inheriting an unsuppressed tail puts a full-volume
+            // crack after a quiet body, so vanilla's short suppressed tail stays unless a set
+            // ships tail_silenced/ itself.
             if (set.BodySilenced == null) set.BodySilenced = set.Body;
-            if (set.TailSilenced == null) set.TailSilenced = set.Tail;
             if (set.DoubletSilenced == null) set.DoubletSilenced = set.Doublet;
 
             if (set.IsEmpty)
@@ -136,6 +168,26 @@ namespace Resound.Audio
             }
 
             return set;
+        }
+
+        // One subfolder per event name; the folder name is matched against SoundElement.EventName
+        // verbatim, because BSG's names are per weapon class and sets are already per class.
+        private static Dictionary<string, AudioClip[]> LoadEvents(string eventsDir)
+        {
+            if (!Directory.Exists(eventsDir))
+                return null;
+
+            Dictionary<string, AudioClip[]> events =
+                new Dictionary<string, AudioClip[]>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string sub in Directory.GetDirectories(eventsDir))
+            {
+                AudioClip[] clips = LoadFolder(sub);
+                if (clips != null)
+                    events[Path.GetFileName(sub)] = clips;
+            }
+
+            return events.Count == 0 ? null : events;
         }
 
         private static AudioClip[] LoadFolder(string dir)
@@ -156,7 +208,7 @@ namespace Resound.Audio
 
                 // Assets are not scene-referenced, so UnloadUnusedAssets would collect them.
                 clip.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                Object.DontDestroyOnLoad(clip);
+                UnityEngine.Object.DontDestroyOnLoad(clip);
 
                 if (clip.length <= 0f)
                 {

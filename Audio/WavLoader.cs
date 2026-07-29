@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using UnityEngine;
 
@@ -143,4 +143,3 @@ namespace Resound.Audio
         }
     }
 }
-

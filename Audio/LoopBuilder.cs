@@ -10,9 +10,9 @@ namespace Resound.Audio
         public const int Beats = 16;
 
         // Longer overlap turns a 1.2s sample into mush at a 0.09s beat.
-        private const float DecayBeats = 4f;
+        public const float DefaultDecayBeats = 4f;
 
-        public static AudioClip Build(AudioClip source, float loopLength)
+        public static AudioClip Build(AudioClip source, float loopLength, float decayBeats)
         {
             if (source == null || loopLength <= 0f)
                 return source;
@@ -33,7 +33,10 @@ namespace Resound.Audio
             if (beatFrames <= 0)
                 return source;
 
-            int decayFrames = Mathf.Min(srcFrames, Mathf.RoundToInt(DecayBeats * beatFrames));
+            if (decayBeats <= 0f)
+                decayBeats = DefaultDecayBeats;
+
+            int decayFrames = Mathf.Min(srcFrames, Mathf.RoundToInt(decayBeats * beatFrames));
             if (decayFrames <= 0)
                 return source;
 
@@ -77,7 +80,9 @@ namespace Resound.Audio
             Object.DontDestroyOnLoad(loop);
 
             Plugin.Dbg("Built 16-beat loop from " + source.name + ": " + loopLength + "s @ " +
-                       (60f / (loopLength / Beats)).ToString("F0") + " RPM");
+                       (60f / (loopLength / Beats)).ToString("F0") + " RPM, decay " + decayBeats +
+                       " beat(s) = " + (decayFrames / (float)freq).ToString("F3") + "s of " +
+                       (srcFrames / (float)freq).ToString("F3") + "s sample");
 
             return loop;
         }

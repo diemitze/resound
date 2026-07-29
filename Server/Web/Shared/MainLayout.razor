@@ -1,0 +1,163 @@
+@inherits LayoutComponentBase
+@inject ISnackbar Snackbar
+@inject ResoundService Resound
+@inject NavigationManager Nav
+
+<HeadContent>
+    <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet"/>
+    <meta name="robots" content="noindex, nofollow">
+    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+    <style>
+        /* Ids and calibers are reference data, not prose. Monospace makes them scannable. */
+        .rs-mono { font-family: "JetBrains Mono", Consolas, monospace; font-size: 0.78rem; letter-spacing: -0.2px; }
+
+        /* A live equaliser standing in for a logo. Each bar runs at its own tempo so the
+           pattern never visibly repeats, which is what stops it reading as a loading spinner. */
+        .rs-eq { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
+        .rs-eq span { width: 3px; background: #F0A202; border-radius: 2px; opacity: 0.85;
+                      transform-origin: bottom; animation: rs-bounce 1.1s ease-in-out infinite; }
+        .rs-eq span:nth-child(1) { animation-duration: 1.30s; animation-delay: -0.20s; }
+        .rs-eq span:nth-child(2) { animation-duration: 0.85s; animation-delay: -0.60s; }
+        .rs-eq span:nth-child(3) { animation-duration: 1.55s; animation-delay: -0.10s; }
+        .rs-eq span:nth-child(4) { animation-duration: 0.70s; animation-delay: -0.45s; }
+        .rs-eq span:nth-child(5) { animation-duration: 1.15s; animation-delay: -0.85s; }
+        @@keyframes rs-bounce {
+            0%, 100% { transform: scaleY(0.35); opacity: 0.55; }
+            50%      { transform: scaleY(1.00); opacity: 1.00; }
+        }
+
+        /* Content lifts in on load, staggered top to bottom so the page assembles rather
+           than appearing all at once. --d is set per block. */
+        .rs-in { opacity: 0; transform: translateY(10px); animation: rs-rise 0.45s cubic-bezier(.22,.61,.36,1) forwards;
+                 animation-delay: var(--d, 0s); }
+        @@keyframes rs-rise { to { opacity: 1; transform: none; } }
+
+        /* Cards respond to the pointer, so the page feels like a surface rather than a printout. */
+        .rs-card { transition: border-color .18s ease, transform .18s ease, background-color .18s ease; }
+        .rs-card:hover { transform: translateY(-2px); border-color: #3A3A44 !important; }
+
+        .rs-pick { cursor: pointer; }
+        .rs-pick:hover { background: #1F1F25; }
+        .rs-pick-on { box-shadow: 0 0 0 1px #F0A202 inset, 0 0 22px -8px #F0A202; }
+
+        /* Numbers count in with a slight overshoot, which reads as "measured" not "static". */
+        .rs-stat { animation: rs-pop 0.55s cubic-bezier(.34,1.56,.64,1) forwards; opacity: 0; transform: scale(.88); }
+        @@keyframes rs-pop { to { opacity: 1; transform: scale(1); } }
+
+        .rs-row { transition: background-color .15s ease; }
+
+        /* Respect the OS setting: everything above is decoration, none of it is information. */
+        @@media (prefers-reduced-motion: reduce) {
+            .rs-eq span, .rs-in, .rs-stat { animation: none !important; opacity: 1 !important; transform: none !important; }
+            .rs-card, .rs-pick, .rs-row { transition: none !important; }
+        }
+
+        .rs-navlink { border-radius: 8px; padding: 6px 14px; text-decoration: none; font-weight: 500; color: #9A9AA2; }
+        .rs-navlink:hover { background: #212127; color: #ECECEE; }
+        .rs-navlink-active { background: #2A2A30; color: #F0A202; }
+
+        /* Sits above content without pushing layout when it appears and disappears. */
+        .rs-savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1400;
+                      border-top: 1px solid #F0A202; background: #0E0E10;
+                      animation: rs-slide-up 0.28s cubic-bezier(.22,.61,.36,1); }
+        @@keyframes rs-slide-up { from { transform: translateY(100%); } to { transform: none; } }
+
+        /* Slow pulse on the unsaved dot, enough to catch the eye without nagging. */
+        .rs-pulse { animation: rs-pulse 2s ease-in-out infinite; }
+        @@keyframes rs-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+        @@media (prefers-reduced-motion: reduce) {
+            .rs-savebar, .rs-pulse { animation: none !important; }
+        }
+    </style>
+</HeadContent>
+
+<MudThemeProvider Theme="ResoundTheme.Theme" IsDarkMode/>
+<MudPopoverProvider/>
+<MudSnackbarProvider/>
+<MudDialogProvider/>
+
+<MudLayout>
+    @* No drawer: two pages do not need a hamburger, and inline nav is one click instead of two. *@
+    <MudAppBar Dense Elevation="0" Style="border-bottom: 1px solid #2A2A30;">
+        <div class="rs-eq mr-3">
+            <span style="height: 40%"></span>
+            <span style="height: 85%"></span>
+            <span style="height: 60%"></span>
+            <span style="height: 100%"></span>
+            <span style="height: 45%"></span>
+        </div>
+        <MudText Typo="Typo.h6" Style="font-weight: 600; letter-spacing: -0.4px;">Resound</MudText>
+        <MudText Typo="Typo.caption" Class="ml-2" Style="color: #6E6E76;">sound packs</MudText>
+
+        <MudDivider Vertical FlexItem Class="mx-4 my-3"/>
+
+        <a href="/resound" class="rs-navlink @Active("/resound")">Overview</a>
+        <a href="/resound/weapons" class="rs-navlink ml-1 @Active("/resound/weapons")">Per weapon</a>
+
+        <MudSpacer/>
+
+        <MudTooltip Text="Discard unsaved changes and re-read config.json">
+            <MudIconButton Icon="@Icons.Material.Outlined.RestartAlt" Color="Color.Default" OnClick="Reload"/>
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudMainContent Class="pt-4" Style="padding-bottom: 88px;">
+        <CascadingValue Value="this">
+            @Body
+        </CascadingValue>
+    </MudMainContent>
+
+    @* Only appears when there is something to lose, so the button always means something. *@
+    @if (Dirty)
+    {
+        <div class="rs-savebar">
+            <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Warning" Size="Size.Small" Class="mr-2 rs-pulse"/>
+                <MudText Typo="Typo.body2">Unsaved changes</MudText>
+                <MudSpacer/>
+                <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="Reload" Class="mr-2">Discard</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Check" OnClick="Save">Save changes</MudButton>
+            </MudContainer>
+        </div>
+    }
+</MudLayout>
+
+@code {
+    public bool Dirty { get; private set; }
+
+    private string Active(string path)
+    {
+        var current = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
+        return current.Equals(path.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) ? "rs-navlink-active" : "";
+    }
+
+    public void MarkDirty()
+    {
+        Dirty = true;
+        StateHasChanged();
+    }
+
+    private void Save()
+    {
+        try
+        {
+            Resound.Save();
+            Dirty = false;
+            Snackbar.Add("Saved. The client picks it up next time it starts.", Severity.Success);
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add($"Could not save: {e.Message}", Severity.Error);
+        }
+    }
+
+    private void Reload()
+    {
+        Resound.Load();
+        Dirty = false;
+        Snackbar.Add("Reloaded from disk.", Severity.Info);
+        StateHasChanged();
+    }
+}

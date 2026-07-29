@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Resound.Audio;
 using Resound.Config;
 using EFT;
@@ -29,12 +29,10 @@ namespace Resound.Patches
 
             string templateId = weapon.TemplateId.ToString();
 
-            if (Plugin.Map.LogWeaponIds)
+            if (Plugin.LogWeaponIds.Value)
                 Plugin.Log.LogInfo("fired: " + weapon.ShortName?.Localized() + "  templateId=" + templateId);
 
-            WeaponMapping mapping = Plugin.Map.Find(templateId);
-            BankSwapper.Apply(weaponSoundPlayer, templateId, mapping);
+            BankSwapper.Apply(weaponSoundPlayer, templateId, PackRegistry.Resolve(weapon));
         }
     }
 }
-

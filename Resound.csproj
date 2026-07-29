@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
+    <!-- JSON DTO fields are assigned by the deserializer, which the compiler cannot see. -->
+    <NoWarn>$(NoWarn);0649</NoWarn>
     <AssemblyName>Resound</AssemblyName>
     <RootNamespace>Resound</RootNamespace>
     <Nullable>disable</Nullable>
@@ -49,6 +51,15 @@
     <None Include="sounds\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The client project globs **/*.cs, so anything living under it gets compiled in. The server
+       half is its own project and example/ is a reference clone; neither belongs in this build. -->
+  <ItemGroup>
+    <Compile Remove="Server\**" />
+    <None Remove="Server\**" />
+    <Compile Remove="example\**" />
+    <None Remove="example\**" />
+  </ItemGroup>
+
   <!-- Auto-deploy to a local SPT install. Skipped when that path does not exist, so cloning
        and building this repo works without having SPT at the same location. -->
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('D:\SPT dev\BepInEx\plugins')">
@@ -63,6 +74,10 @@
       <ZipFileName>$(ModName).zip</ZipFileName>
       <TempPackageDir>$(ProjectDir)obj\Package</TempPackageDir>
       <ModPackageDir>$(TempPackageDir)\BepInEx\plugins</ModPackageDir>
+      <!-- Always Release: the Debug output carries a pdb and static web asset manifests that
+           have no business in a download. -->
+      <ServerBuildDir>$(ProjectDir)Server\bin\Release\Resound.Server</ServerBuildDir>
+      <ServerPackageDir>$(TempPackageDir)\user\mods\Resound.Server</ServerPackageDir>
     </PropertyGroup>
     <ItemGroup>
       <!-- Ship the audio with the mod so it works on install with nothing for the user to do. -->
@@ -74,9 +89,22 @@
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModPackageDir)" />
     <Copy SourceFiles="@(SoundFiles)"
           DestinationFolder="$(ModPackageDir)\Resound\sounds\%(RecursiveDir)" />
+
+    <!-- The server half is its own project on a different framework, so it is built here rather
+         than referenced. The user unzips both halves and deletes user/mods if they do not want
+         the config page. Failing to build it must not cost us the client zip. -->
+    <MSBuild Projects="$(ProjectDir)Server\Resound.Server.csproj" Targets="Build"
+             Properties="Configuration=Release" ContinueOnError="WarnAndContinue" />
+    <ItemGroup>
+      <ServerFiles Include="$(ServerBuildDir)\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ServerFiles)" DestinationFolder="$(ServerPackageDir)\%(RecursiveDir)" />
+    <Warning Text="Server half not packaged: no build output in $(ServerBuildDir)."
+             Condition="'@(ServerFiles)' == ''" />
+
     <ZipDirectory SourceDirectory="$(TempPackageDir)" DestinationFile="$(ProjectDir)$(ZipFileName)" Overwrite="true" />
     <RemoveDir Directories="$(TempPackageDir)" />
-    <Message Text="--- Mod packaged: $(ProjectDir)$(ZipFileName) (@(SoundFiles->Count()) sound file(s) included) ---" Importance="high" />
+    <Message Text="--- Mod packaged: $(ProjectDir)$(ZipFileName) (@(SoundFiles->Count()) sound file(s), @(ServerFiles->Count()) server file(s)) ---" Importance="high" />
   </Target>
 
 </Project>

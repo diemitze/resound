@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
@@ -27,18 +27,31 @@ namespace Resound.Config
 
         [JsonProperty("tailVolume")]
         public float TailVolume = 1.0f;
+
+        // Suppressed banks, null meaning "same as unsuppressed". Worth setting when the source
+        // game normalises every sample to the same peak (BO2 does), because EFT's silenced bank
+        // volume is tuned for BSG's own much quieter suppressed recording.
+        [JsonProperty("bodySilencedVolume")]
+        public float? BodySilencedVolume;
+
+        [JsonProperty("tailSilencedVolume")]
+        public float? TailSilencedVolume;
+
+        // How many beats of each shot survive in the full-auto loop, null meaning the default 4.
+        // A sample longer than this window gets cut short with a linear fade. Raising it keeps
+        // more of the sample but overlaps more copies, which past a point is mush not fidelity.
+        [JsonProperty("decayBeats")]
+        public float? DecayBeats;
+
+        // Scales BSG's per-event volume, which is not always 1.0 (the MP-155 ships 1.1 and 1.2).
+        [JsonProperty("eventVolume")]
+        public float EventVolume = 1.0f;
     }
 
     internal class SoundMap
     {
-        [JsonProperty("logWeaponIds")]
-        public bool LogWeaponIds = false;
-
         [JsonProperty("weapons")]
         public List<WeaponMapping> Weapons = new List<WeaponMapping>();
-
-        private readonly Dictionary<string, WeaponMapping> _byTemplate =
-            new Dictionary<string, WeaponMapping>(StringComparer.OrdinalIgnoreCase);
 
         public static SoundMap Load(string path)
         {
@@ -50,9 +63,7 @@ namespace Resound.Config
 
             try
             {
-                SoundMap map = JsonConvert.DeserializeObject<SoundMap>(File.ReadAllText(path)) ?? new SoundMap();
-                map.Index();
-                return map;
+                return JsonConvert.DeserializeObject<SoundMap>(File.ReadAllText(path)) ?? new SoundMap();
             }
             catch (Exception e)
             {
@@ -60,26 +71,5 @@ namespace Resound.Config
                 return new SoundMap();
             }
         }
-
-        private void Index()
-        {
-            foreach (WeaponMapping w in Weapons)
-            {
-                if (!w.Enabled || string.IsNullOrEmpty(w.TemplateId) || string.IsNullOrEmpty(w.SoundSet))
-                    continue;
-
-                _byTemplate[w.TemplateId] = w;
-            }
-        }
-
-        public WeaponMapping Find(string templateId)
-        {
-            if (string.IsNullOrEmpty(templateId))
-                return null;
-
-            _byTemplate.TryGetValue(templateId, out WeaponMapping w);
-            return w;
-        }
     }
 }
-

@@ -1,0 +1,279 @@
+@page "/resound/weapons"
+@layout MainLayout
+@inject ResoundService Resound
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+
+    <MudPaper Class="pa-4 mb-3 rs-in" Elevation="0" Style="--d:0s; border: 1px solid #2A2A30;">
+        @* Search and the toggle share a row; chips get their own full-width row underneath so
+           they can wrap without colliding with anything. *@
+        <div class="d-flex align-center gap-3 flex-wrap">
+            <MudTextField @bind-Value="_search" Immediate="true" Clearable="true"
+                          Placeholder="Search name, id or caliber" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Style="max-width: 420px;"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"/>
+            <MudSpacer/>
+            <MudSwitch T="bool" @bind-Value="_onlyOverridden" Color="Color.Primary" Label="Pinned only"/>
+            @if (Resound.Config.Overrides.Count > 0)
+            {
+                <MudTooltip Text="Unpin every weapon">
+                    <MudIconButton Icon="@Icons.Material.Outlined.LayersClear"
+                                   Color="Color.Warning" OnClick="ClearAll"/>
+                </MudTooltip>
+            }
+        </div>
+
+        @* Status first: "what is actually changed" is the question people open this page with. *@
+        <div class="d-flex flex-wrap gap-2 mt-3 align-center">
+            <MudText Typo="Typo.caption" Style="color: #6E6E76; width: 46px;">SHOWS</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="@Stat(null)" Color="Color.Default"
+                     OnClick="@(() => _sourceFilter = null)">everything</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="@Stat(SoundSource.Vanilla)" Color="Color.Default"
+                     OnClick="@(() => _sourceFilter = SoundSource.Vanilla)">vanilla</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="@Stat(SoundSource.Builtin)" Color="Color.Warning"
+                     OnClick="@(() => _sourceFilter = SoundSource.Builtin)">Resound</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="@Stat(SoundSource.Addon)" Color="Color.Secondary"
+                     OnClick="@(() => _sourceFilter = SoundSource.Addon)">add-on packs</MudChip>
+        </div>
+
+        @* Class chips instead of a dropdown: they double as a legend for what exists. *@
+        <div class="d-flex flex-wrap gap-2 mt-2 align-center">
+            <MudText Typo="Typo.caption" Style="color: #6E6E76; width: 46px;">CLASS</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="@Chip(null)"
+                     Color="Color.Primary" OnClick="@(() => _classFilter = null)">all</MudChip>
+            @foreach (var c in _classes)
+            {
+                var cls = c;
+                <MudChip T="string" Size="Size.Small" Variant="@Chip(cls)"
+                         Color="Color.Primary" OnClick="@(() => _classFilter = cls)">@cls</MudChip>
+            }
+        </div>
+
+        <MudDivider Class="my-3"/>
+
+        <div class="d-flex flex-wrap gap-4">
+            <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                Showing <b style="color:#ECECEE">@Filtered.Count</b> of @_weapons.Count
+            </MudText>
+            <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                Vanilla <b style="color:#ECECEE">@_countVanilla</b>
+            </MudText>
+            <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                Resound <b style="color:#F0A202">@_countBuiltin</b>
+            </MudText>
+            <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                Add-ons <b style="color:#2EC4B6">@_countAddon</b>
+            </MudText>
+            @if (Resound.Config.Overrides.Count > 0)
+            {
+                <MudText Typo="Typo.caption" Style="color: #6E6E76;">
+                    Pinned <b style="color:#ECECEE">@Resound.Config.Overrides.Count</b>
+                </MudText>
+            }
+        </div>
+    </MudPaper>
+
+    <MudPaper Elevation="0" Class="rs-in" Style="--d:.08s; border: 1px solid #2A2A30; overflow: hidden;">
+        @* Virtualized: several hundred weapons once content mods are installed. *@
+        <MudTable Items="Filtered" Dense="true" Hover="true" Elevation="0" Virtualize="true"
+                  Height="calc(100vh - 300px)" FixedHeader="true" Striped="false">
+            <HeaderContent>
+                <MudTh>Weapon</MudTh>
+                <MudTh Style="width: 190px">Currently plays</MudTh>
+                <MudTh Style="width: 130px">Class</MudTh>
+                <MudTh Style="width: 120px">Caliber</MudTh>
+                <MudTh Style="width: 300px">Override</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Weapon" Class="rs-row">
+                    <div class="d-flex align-center">
+                        @if (Resound.Config.Overrides.ContainsKey(context.Id))
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.PushPin" Color="Color.Primary"
+                                     Size="Size.Small" Class="mr-2"/>
+                        }
+                        <div>
+                            <MudText Typo="Typo.body2">@context.ShortName</MudText>
+                            @* Plenty of weapons have the same short and full name; repeating it is noise. *@
+                            @if (!string.Equals(context.Name, context.ShortName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <MudText Typo="Typo.caption" Style="color: #6E6E76;">@context.Name</MudText>
+                            }
+                        </div>
+                    </div>
+                </MudTd>
+                <MudTd DataLabel="Currently plays">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@Tone(Effect(context).Source)">
+                        @Effect(context).Label
+                    </MudChip>
+                    @if (!string.IsNullOrEmpty(Effect(context).EntryName))
+                    {
+                        <MudText Typo="Typo.caption" Style="color: #6E6E76;" Class="d-block">@Effect(context).EntryName</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Class">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">
+                        @context.WeapClass
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Caliber">
+                    <span class="rs-mono" style="color: #9A9AA2;">@Pretty(context.Caliber)</span>
+                </MudTd>
+                <MudTd DataLabel="Override">
+                    <MudSelect T="string" Value="@Current(context.Id)" Dense="true" Margin="Margin.Dense"
+                               ValueChanged="@(v => Set(context.Id, v))" Variant="Variant.Outlined"
+                               AnchorOrigin="Origin.BottomCenter">
+                        <MudSelectItem T="string" Value="@Follow">Auto &mdash; @Effect(context).Label</MudSelectItem>
+                        <MudSelectItem T="string" Value="@Vanilla">Force vanilla</MudSelectItem>
+                        @foreach (var pack in _packs)
+                        {
+                            <MudSelectItem T="string" Value="@pack.Id">
+                                @(string.IsNullOrEmpty(pack.Name) ? pack.Id : pack.Name)
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Style="color: #6E6E76;" Class="pa-6">
+                    Nothing matches those filters.
+                </MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+
+</MudContainer>
+
+@code {
+    [CascadingParameter] private MainLayout? Layout { get; set; }
+
+    private const string Follow = "";
+    private const string Vanilla = "Vanilla";
+
+    private List<WeaponRow> _weapons = new();
+    private List<PackRow> _packs = new();
+    private List<string> _classes = new();
+
+    private string _search = "";
+    private string? _classFilter;
+    private SoundSource? _sourceFilter;
+    private bool _onlyOverridden;
+
+    private int _countVanilla;
+    private int _countBuiltin;
+    private int _countAddon;
+
+    protected override void OnInitialized()
+    {
+        _weapons = Resound.GetWeapons();
+        _packs = Resound.GetPacks();
+        _classes = _weapons.Select(w => w.WeapClass).Distinct().OrderBy(c => c).ToList();
+        Recount();
+    }
+
+    // Resolution is pure and cheap, but it runs per row per render, so cache it per pass.
+    private readonly Dictionary<string, Effective> _cache = new();
+
+    private Effective Effect(WeaponRow w)
+    {
+        if (_cache.TryGetValue(w.Id, out var hit))
+            return hit;
+
+        var e = Resound.Resolve(w, _packs);
+        _cache[w.Id] = e;
+        return e;
+    }
+
+    private void Recount()
+    {
+        _cache.Clear();
+        _countVanilla = _countBuiltin = _countAddon = 0;
+
+        foreach (var w in _weapons)
+        {
+            switch (Effect(w).Source)
+            {
+                case SoundSource.Builtin: _countBuiltin++; break;
+                case SoundSource.Addon: _countAddon++; break;
+                default: _countVanilla++; break;
+            }
+        }
+    }
+
+    private Variant Stat(SoundSource? s)
+    {
+        return _sourceFilter == s ? Variant.Filled : Variant.Outlined;
+    }
+
+    private static Color Tone(SoundSource s)
+    {
+        return s switch
+        {
+            SoundSource.Builtin => Color.Warning,
+            SoundSource.Addon => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private Variant Chip(string? cls)
+    {
+        return _classFilter == cls ? Variant.Filled : Variant.Outlined;
+    }
+
+    private List<WeaponRow> Filtered
+    {
+        get
+        {
+            IEnumerable<WeaponRow> q = _weapons;
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.Trim();
+                q = q.Where(w => w.Name.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || w.ShortName.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || w.Id.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || w.Caliber.Contains(s, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrEmpty(_classFilter))
+                q = q.Where(w => w.WeapClass == _classFilter);
+
+            if (_sourceFilter is { } src)
+                q = q.Where(w => Effect(w).Source == src);
+
+            if (_onlyOverridden)
+                q = q.Where(w => Resound.Config.Overrides.ContainsKey(w.Id));
+
+            return q.ToList();
+        }
+    }
+
+    private string Current(string id)
+    {
+        return Resound.Config.Overrides.TryGetValue(id, out var v) ? v : Follow;
+    }
+
+    private void Set(string id, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            Resound.Config.Overrides.Remove(id);
+        else
+            Resound.Config.Overrides[id] = value;
+
+        Recount();
+        Layout?.MarkDirty();
+    }
+
+    private void ClearAll()
+    {
+        Resound.Config.Overrides.Clear();
+        Recount();
+        Layout?.MarkDirty();
+    }
+
+    // Caliber762x51 is the game's own string and unreadable in a dense table.
+    private static string Pretty(string caliber)
+    {
+        return string.IsNullOrEmpty(caliber) ? "-" : caliber.Replace("Caliber", "");
+    }
+}

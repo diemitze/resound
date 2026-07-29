@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using EFT;
 using UnityEngine;
@@ -14,17 +15,42 @@ namespace Resound.Audio
             typeof(SoundBank).GetField("_shuffleIndex", BindingFlags.Instance | BindingFlags.NonPublic);
 
         // Shared like the vanilla assets are, otherwise every weapon draw leaks a clone.
-        private static readonly System.Collections.Generic.Dictionary<string, SoundBank> Cache =
-            new System.Collections.Generic.Dictionary<string, SoundBank>();
+        private static readonly Dictionary<string, SoundBank> Cache = new Dictionary<string, SoundBank>();
+
+        // For slots a set does not replace. Without this the kept vanilla bank plays at full
+        // BaseVolume beside clips that were turned down, and the volume knob appears to do nothing.
+        public static SoundBank Rescale(SoundBank original, float volumeScale)
+        {
+            if (original == null || volumeScale == 1.0f)
+                return null;
+
+            string key = original.GetInstanceID() + "|rescale|" + volumeScale;
+            if (Cache.TryGetValue(key, out SoundBank hit) && hit != null)
+                return hit;
+
+            SoundBank bank = Object.Instantiate(original);
+            Object.DontDestroyOnLoad(bank);
+            Cache[key] = bank;
+
+            bank.BaseVolume *= volumeScale;
+            bank.DeltaVolume *= volumeScale;
+            bank.name = original.name + "_resound_vol";
+
+            ShuffleField?.SetValue(bank, null);
+            ShuffleIndexField?.SetValue(bank, (byte)0);
+
+            return bank;
+        }
 
         // buildLoop is only correct for an automatic weapon's Body bank.
-        public static SoundBank Clone(SoundBank original, AudioClip[] clips, bool buildLoop, float volumeScale)
+        public static SoundBank Clone(SoundBank original, AudioClip[] clips, bool buildLoop, float volumeScale,
+            float decayBeats)
         {
             if (original == null || clips == null || clips.Length == 0)
                 return null;
 
             string key = original.GetInstanceID() + "|" + clips[0].GetInstanceID() + "|" + clips.Length +
-                         "|" + buildLoop + "|" + volumeScale;
+                         "|" + buildLoop + "|" + volumeScale + "|" + decayBeats;
             if (Cache.TryGetValue(key, out SoundBank hit) && hit != null)
                 return hit;
 
@@ -35,7 +61,7 @@ namespace Resound.Audio
                 {
                     AudioClip[] looped = new AudioClip[clips.Length];
                     for (int i = 0; i < clips.Length; i++)
-                        looped[i] = LoopBuilder.Build(clips[i], loopLength);
+                        looped[i] = LoopBuilder.Build(clips[i], loopLength, decayBeats);
 
                     clips = looped;
                 }

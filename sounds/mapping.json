@@ -7,7 +7,7 @@
       "templateId": "5644bd2b4bdc2d3b4c8b4572",
       "soundSet": "ak74n",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.28,
       "enabled": true
     },
     {
@@ -15,15 +15,68 @@
       "templateId": "5447a9cd4bdc2dbd208b4567",
       "soundSet": "m4a1",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.28,
       "enabled": true
     },
+    {
+      "name": "FN SCAR-H (Mk 17) 7.62x51 (BO2 SCAR-H)",
+      "templateId": "6183afd850224f204c1da514",
+      "soundSet": "scarh",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "enabled": true
+    },
+    {
+      "name": "FN SCAR-H (Mk 17) FDE 7.62x51 (BO2 SCAR-H)",
+      "templateId": "6165ac306ef05c2ce828ef74",
+      "soundSet": "scarh",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "enabled": true
+    },
+    {
+      "name": "X Products X-17 SCAR 17 7.62x51 (BO2 SCAR-H)",
+      "templateId": "676176d362e0497044079f4c",
+      "soundSet": "scarh",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "enabled": true
+    },
+    {
+      "name": "FN SCAR-L (Mk 16) 5.56x45 (BO2 SCAR-H, wrong caliber)",
+      "templateId": "6184055050224f204c1da540",
+      "soundSet": "scarh",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "enabled": false
+    },
+    {
+      "name": "FN SCAR-L (Mk 16) FDE 5.56x45 (BO2 SCAR-H, wrong caliber)",
+      "templateId": "618428466ef05c2ce828f218",
+      "soundSet": "scarh",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "enabled": false
+    },
+
     {
       "name": "HK MP5 (Navy 3) 9x19",
       "templateId": "5926bb2186f7744b1c6c6e60",
       "soundSet": "mp5",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -31,15 +84,69 @@
       "templateId": "5d2f0d8048f0356c925bc3b0",
       "soundSet": "mp5",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": true
     },
+    {
+      "name": "HK 416A5 5.56x45 (BO2 M27 IAR)",
+      "templateId": "5bb2475ed4351e00853264e3",
+      "soundSet": "hk416",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
+      "enabled": true
+    },
+
+    {
+      "name": "FN P90 5.7x28 (BO2 PDW-57)",
+      "templateId": "5cc82d76e24e8d00134b4b83",
+      "soundSet": "p90",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.25,
+      "enabled": true
+    },
+    {
+      "name": "KRISS Vector Gen.2 .45 ACP (BO2 Vector K10)",
+      "templateId": "5fb64bc92b1b027b1f50bcf2",
+      "soundSet": "vector",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.25,
+      "enabled": true
+    },
+    {
+      "name": "KRISS Vector Gen.2 9x19 (BO2 Vector K10)",
+      "templateId": "5fc3f2d5900b1d5091531e57",
+      "soundSet": "vector",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.25,
+      "enabled": true
+    },
+    {
+      "name": "HK MP7A1 4.6x30 (BO2 MP7)",
+      "templateId": "5ba26383d4351e00334c93d9",
+      "soundSet": "mp7",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.25,
+      "enabled": true
+    },
+    {
+      "name": "HK MP7A2 4.6x30 (BO2 MP7)",
+      "templateId": "5bd70322209c4d00d7167b8f",
+      "soundSet": "mp7",
+      "bodyVolume": 1.0,
+      "tailVolume": 0.25,
+      "enabled": true
+    },
+
     {
       "name": "SKS (TOZ) 7.62x39",
       "templateId": "574d967124597745970e7c94",
       "soundSet": "sks",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
     {
@@ -47,7 +154,7 @@
       "templateId": "587e02ff24597743df3deaeb",
       "soundSet": "sks",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
     {
@@ -55,7 +162,7 @@
       "templateId": "673cab3e03c6a20581028bc1",
       "soundSet": "trgm10",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
 
@@ -89,7 +196,7 @@
       "templateId": "668fe5a998b5ad715703ddd6",
       "soundSet": "deagle",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.27,
       "enabled": true
     },
     {
@@ -97,7 +204,7 @@
       "templateId": "669fa39b48fc9f8db6035a0c",
       "soundSet": "deagle",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.27,
       "enabled": true
     },
     {
@@ -105,7 +212,7 @@
       "templateId": "669fa3d876116c89840b1217",
       "soundSet": "deagle",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.27,
       "enabled": true
     },
     {
@@ -113,7 +220,7 @@
       "templateId": "669fa3f88abd2662d80eee77",
       "soundSet": "deagle",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.27,
       "enabled": true
     },
     {
@@ -121,7 +228,7 @@
       "templateId": "669fa409933e898cce0c2166",
       "soundSet": "deagle",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.27,
       "enabled": true
     },
 
@@ -130,7 +237,7 @@
       "templateId": "54491c4f4bdc2db1078b4568",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
     {
@@ -138,7 +245,7 @@
       "templateId": "5a7828548dc32e5a9c28b516",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
     {
@@ -146,7 +253,7 @@
       "templateId": "5e870397991fd70db46995c8",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": false
     },
     {
@@ -154,7 +261,7 @@
       "templateId": "5e848cc2988a8701445df1e8",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": false
     },
     {
@@ -162,7 +269,7 @@
       "templateId": "5a38e6bac4a2826c6e06d79b",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": false
     },
     {
@@ -170,7 +277,7 @@
       "templateId": "61f7c9e189e6fb1a5e3ea78d",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
     {
@@ -178,7 +285,7 @@
       "templateId": "5580223e4bdc2d1c128b457f",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
     {
@@ -186,7 +293,7 @@
       "templateId": "64748cb8de82c85eaf0a273a",
       "soundSet": "shotgun_pump",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
       "enabled": true
     },
 
@@ -195,7 +302,9 @@
       "templateId": "56dee2bdd2720bc8328b4567",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -203,7 +312,9 @@
       "templateId": "606dae0ab0e443224b421bb7",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -211,7 +322,9 @@
       "templateId": "6259b864ebedf17603599e88",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": false
     },
     {
@@ -219,7 +332,9 @@
       "templateId": "576165642459773c7a400233",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -227,7 +342,9 @@
       "templateId": "674fe9a75e51f1c47c04ec23",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -235,7 +352,9 @@
       "templateId": "66ffa9b66e19cc902401c5e8",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": false
     },
     {
@@ -243,7 +362,9 @@
       "templateId": "67124dcfa3541f2a1f0e788b",
       "soundSet": "shotgun_auto",
       "bodyVolume": 1.0,
-      "tailVolume": 0.8,
+      "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
+      "tailSilencedVolume": 0.3,
       "enabled": false
     }
   ]

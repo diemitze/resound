@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Resound.Config;
 using EFT;
+using UnityEngine;
 
 namespace Resound.Audio
 {
@@ -14,6 +15,9 @@ namespace Resound.Audio
             public WeaponSoundPlayer Owner;
             public string TemplateId;
             public SoundSet Set;
+            // _firingLoopLength is read off whichever body bank matches this, so a suppressor
+            // going on or coming off has to re-apply even when the weapon has not changed.
+            public bool Silenced;
             public SoundBank Body, Tail, Doublet, BodySilenced, TailSilenced, DoubletSilenced;
         }
 
@@ -37,7 +41,7 @@ namespace Resound.Audio
                 FiringLoopLengthField.SetValue(player, bank.ClipLength);
         }
 
-        public static void Apply(WeaponSoundPlayer player, string templateId, WeaponMapping mapping)
+        public static void Apply(WeaponSoundPlayer player, string templateId, SoundProfile profile)
         {
             if (player == null)
                 return;
@@ -48,12 +52,11 @@ namespace Resound.Audio
             if (state != null && !ReferenceEquals(state.Owner, player))
                 state = null;
 
-            SoundSet current = mapping == null
-                ? null
-                : ClipLibrary.Get(Plugin.SoundsRoot, mapping.SoundSet);
+            SoundSet set = profile == null ? null : ClipLibrary.Get(profile.SetDir);
 
             // Comparing set identity is what makes a clip reload re-apply.
-            if (state != null && state.TemplateId == templateId && ReferenceEquals(state.Set, current))
+            if (state != null && state.TemplateId == templateId && ReferenceEquals(state.Set, set) &&
+                state.Silenced == player.IsSilenced)
                 return;
 
             if (state == null)
@@ -82,60 +85,77 @@ namespace Resound.Audio
             }
 
             state.TemplateId = templateId;
-            state.Set = current;
+            state.Set = set;
+            state.Silenced = player.IsSilenced;
 
-            if (mapping == null)
+            if (profile == null)
             {
                 RefreshFiringLoopLength(player);
                 return;
             }
 
-            if (current == null)
+            if (set == null)
             {
-                Plugin.Log.LogWarning("No clips for set '" + mapping.SoundSet + "' (" + mapping.Name +
-                                      "), staying on vanilla.");
+                Plugin.Log.LogWarning("No clips for " + profile.Label + " at " + profile.SetDir +
+                                      ", staying on vanilla.");
                 RefreshFiringLoopLength(player);
                 return;
             }
-
-            SoundSet set = current;
 
             // Only an automatic weapon's body is a loop; tails are always one-shots.
             bool loop = player.IsAutoWeapon;
 
-            float bodyVol = mapping.BodyVolume;
-            float tailVol = mapping.TailVolume;
+            float bodyVol = profile.BodyVolume;
+            float tailVol = profile.TailVolume;
+            float bodySilVol = profile.BodySilencedVolume ?? bodyVol;
+            float tailSilVol = profile.TailSilencedVolume ?? tailVol;
+            float decay = profile.DecayBeats ?? LoopBuilder.DefaultDecayBeats;
 
-            player.Body = Swap(state.Body, set.Body, loop, bodyVol) ?? player.Body;
-            player.Tail = Swap(state.Tail, set.Tail, false, tailVol) ?? player.Tail;
-            player.Doublet = Swap(state.Doublet, set.Doublet, false, bodyVol) ?? player.Doublet;
-            player.BodySilenced = Swap(state.BodySilenced, set.BodySilenced, loop, bodyVol) ?? player.BodySilenced;
-            player.TailSilenced = Swap(state.TailSilenced, set.TailSilenced, false, tailVol) ?? player.TailSilenced;
-            player.DoubletSilenced = Swap(state.DoubletSilenced, set.DoubletSilenced, false, bodyVol) ?? player.DoubletSilenced;
+            player.Body = Apply(state.Body, set.Body, loop, bodyVol, decay) ?? player.Body;
+            player.Tail = Apply(state.Tail, set.Tail, false, tailVol, decay) ?? player.Tail;
+            player.Doublet = Apply(state.Doublet, set.Doublet, false, bodyVol, decay) ?? player.Doublet;
+            player.BodySilenced = Apply(state.BodySilenced, set.BodySilenced, loop, bodySilVol, decay) ?? player.BodySilenced;
+            player.TailSilenced = Apply(state.TailSilenced, set.TailSilenced, false, tailSilVol, decay) ?? player.TailSilenced;
+            player.DoubletSilenced = Apply(state.DoubletSilenced, set.DoubletSilenced, false, bodySilVol, decay) ?? player.DoubletSilenced;
 
             RefreshFiringLoopLength(player);
 
-            Plugin.Log.LogInfo("Swapped " + mapping.Name + " -> '" + mapping.SoundSet + "' (auto=" + loop + ")");
+            Plugin.Log.LogInfo("Swapped " + templateId + " -> " + profile.Label + " (auto=" + loop + ")");
 
             if (Plugin.Debug != null && Plugin.Debug.Value)
             {
-                float clipLen = set.Body != null && set.Body.Length > 0 && set.Body[0] != null
-                    ? set.Body[0].length
+                // Report whichever path is actually live, or a suppressed problem reads clean.
+                bool sil = player.IsSilenced;
+                AudioClip[] bodyClips = sil ? set.BodySilenced : set.Body;
+                float clipLen = bodyClips != null && bodyClips.Length > 0 && bodyClips[0] != null
+                    ? bodyClips[0].length
                     : -1f;
 
-                Plugin.Dbg("  vol body/tail=" + bodyVol + "/" + tailVol +
+                SoundBank liveBody = sil ? player.BodySilenced : player.Body;
+                SoundBank liveTail = sil ? player.TailSilenced : player.Tail;
+
+                Plugin.Dbg("  silenced=" + sil +
+                           ", vol body/tail=" + (sil ? bodySilVol : bodyVol) + "/" + (sil ? tailSilVol : tailVol) +
                            ", bodyClip=" + clipLen + "s" +
-                           ", bankLength=" + player.Body?.ClipLength +
+                           ", bodyBank=" + liveBody?.name + " len=" + liveBody?.ClipLength +
+                           " baseVol=" + liveBody?.BaseVolume +
+                           ", tailBank=" + liveTail?.name + " baseVol=" + liveTail?.BaseVolume +
                            ", firingLoopLength=" + FiringLoopLengthField?.GetValue(player));
             }
         }
 
-        private static SoundBank Swap(SoundBank original, UnityEngine.AudioClip[] clips, bool loop, float volume)
+        // No clips for this slot still means the volume applies: the vanilla bank is kept, but
+        // rescaled, so it stays balanced against the slots the set does replace.
+        private static SoundBank Apply(SoundBank original, AudioClip[] clips, bool loop, float volume,
+            float decayBeats)
         {
-            if (original == null || clips == null)
+            if (original == null)
                 return null;
 
-            return BankFactory.Clone(original, clips, loop, volume);
+            if (clips == null)
+                return BankFactory.Rescale(original, volume);
+
+            return BankFactory.Clone(original, clips, loop, volume, decayBeats);
         }
     }
 }
