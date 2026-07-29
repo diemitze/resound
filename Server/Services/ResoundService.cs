@@ -8,8 +8,7 @@ using SPTarkov.Server.Core.Services;
 
 namespace ResoundServer.Services;
 
-// Everything the config page needs: the weapon list, the packs the player has installed, and
-// the saved selections. Singleton so the pages and the client route see the same state.
+
 [Injectable(InjectionType.Singleton)]
 public class ResoundService
 {

@@ -3,21 +3,19 @@ using System.Text.RegularExpressions;
 
 namespace ResoundServer.Models;
 
-// What the client asks for over /resound/config. Deliberately small: the client already knows
-// how to load packs, this only tells it which one to prefer.
+
 public class ResoundWebConfig
 {
-    /// <summary>"Auto" lets every installed pack compete on priority.</summary>
+    
     [JsonPropertyName("activePack")]
     public string ActivePack { get; set; } = "Auto";
 
-    /// <summary>Weapon template id to pack id. Beats ActivePack and every priority.</summary>
+    
     [JsonPropertyName("overrides")]
     public Dictionary<string, string> Overrides { get; set; } = new();
 }
 
-// One row in the weapons table. Built from the server's item database, which is the only place
-// a full weapon list with real names exists.
+
 public class WeaponRow
 {
     public string Id { get; set; } = "";
@@ -137,9 +135,7 @@ public class Effective
     };
 }
 
-// One line of the decision table the client asks for. Deliberately carries the pack id and set
-// name rather than a path: with Fika the client can be on another machine entirely, where the
-// server's absolute paths mean nothing. The server decides, the client locates.
+
 public class ResolvedSound
 {
     [JsonPropertyName("packId")] public string PackId { get; set; } = "";

@@ -3,9 +3,7 @@ using SPTarkov.Server.Web;
 
 namespace ResoundServer;
 
-// Every SPT server mod declares itself this way; the abstract base fixes which members exist.
-// The part that matters here is IModWebMetadata, which is what makes the server pick up the
-// Blazor pages under Web/. Without it the assembly still loads and the routes simply never appear.
+
 public record ModMetadata : AbstractModMetadata, IModWebMetadata
 {
     public override string ModGuid { get; init; } = "com.20fpsguy.resound.server";

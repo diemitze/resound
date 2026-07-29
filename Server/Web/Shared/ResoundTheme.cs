@@ -2,8 +2,7 @@ using MudBlazor;
 
 namespace ResoundServer.Web.Shared;
 
-// Audio-equipment palette: near-black chassis, amber for anything you can act on, teal for
-// state. Deliberately not MudBlazor's default purple, which every Blazor page in the wild uses.
+
 public static class ResoundTheme
 {
     public static readonly MudTheme Theme = new()

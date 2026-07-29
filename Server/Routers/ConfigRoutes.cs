@@ -5,18 +5,11 @@ using SPTarkov.Server.Core.Utils;
 
 namespace ResoundServer.Routers;
 
-/// <summary>
-/// The two endpoints the client plugin reads at startup. <c>/resound/config</c> returns the raw
-/// saved selection; <c>/resound/resolve</c> returns the decision table, every weapon template id
-/// mapped to the pack and sound set that wins for it. The client applies that answer rather than
-/// working it out again, so the config page can never show something the game disagrees with.
-/// Both are built per request, so saving on the page takes effect the next time a client starts.
-/// </summary>
+
 [Injectable(TypePriority = OnLoadOrder.PreSptModLoader)]
 public class ConfigRoutes : StaticRouter
 {
-    // StaticRouter wants its routes at construction, before instance state exists, so the
-    // service is handed to the route bodies through a field the constructor fills.
+   
     private static ResoundService? _service;
     private static JsonUtil? _json;
 
