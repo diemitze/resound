@@ -8,13 +8,11 @@
     <meta name="robots" content="noindex, nofollow">
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
     <style>
-        /* Ids and calibers are reference data, not prose. Monospace makes them scannable. */
         .rs-mono { font-family: "JetBrains Mono", Consolas, monospace; font-size: 0.78rem; letter-spacing: -0.2px; }
 
-        /* A live equaliser standing in for a logo. Each bar runs at its own tempo so the
-           pattern never visibly repeats, which is what stops it reading as a loading spinner. */
+        /* Equaliser logo; each bar has its own tempo so it never reads as a spinner. */
         .rs-eq { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
-        .rs-eq span { width: 3px; background: #F0A202; border-radius: 2px; opacity: 0.85;
+        .rs-eq span { width: 3px; background: #5B9CFF; border-radius: 2px; opacity: 0.8;
                       transform-origin: bottom; animation: rs-bounce 1.1s ease-in-out infinite; }
         .rs-eq span:nth-child(1) { animation-duration: 1.30s; animation-delay: -0.20s; }
         .rs-eq span:nth-child(2) { animation-duration: 0.85s; animation-delay: -0.60s; }
@@ -26,48 +24,79 @@
             50%      { transform: scaleY(1.00); opacity: 1.00; }
         }
 
-        /* Content lifts in on load, staggered top to bottom so the page assembles rather
-           than appearing all at once. --d is set per block. */
+        /* Staggered entrance; --d is set per block. */
         .rs-in { opacity: 0; transform: translateY(10px); animation: rs-rise 0.45s cubic-bezier(.22,.61,.36,1) forwards;
                  animation-delay: var(--d, 0s); }
         @@keyframes rs-rise { to { opacity: 1; transform: none; } }
 
-        /* Cards respond to the pointer, so the page feels like a surface rather than a printout. */
         .rs-card { transition: border-color .18s ease, transform .18s ease, background-color .18s ease; }
-        .rs-card:hover { transform: translateY(-2px); border-color: #3A3A44 !important; }
+        .rs-card:hover { transform: translateY(-2px); border-color: #3A3A45 !important; }
 
         .rs-pick { cursor: pointer; }
-        .rs-pick:hover { background: #1F1F25; }
-        .rs-pick-on { box-shadow: 0 0 0 1px #F0A202 inset, 0 0 22px -8px #F0A202; }
+        .rs-pick:hover { background: #1C1C22; }
+        .rs-pick-on { box-shadow: 0 0 0 1px #5B9CFF inset; }
 
-        /* Numbers count in with a slight overshoot, which reads as "measured" not "static". */
         .rs-stat { animation: rs-pop 0.55s cubic-bezier(.34,1.56,.64,1) forwards; opacity: 0; transform: scale(.88); }
         @@keyframes rs-pop { to { opacity: 1; transform: scale(1); } }
 
         .rs-row { transition: background-color .15s ease; }
 
-        /* Respect the OS setting: everything above is decoration, none of it is information. */
+        /* One tag shape for everything that names a sound, clickable or not. */
+        .rs-tag { display: inline-flex; align-items: center; height: 21px; padding: 0 9px;
+                  border: 1px solid #2C2C35; border-radius: 5px; font-size: 0.72rem;
+                  font-weight: 500; letter-spacing: 0.2px; white-space: nowrap; }
+        .rs-tap { cursor: pointer; background: none; font-family: inherit;
+                  transition: background-color .14s ease, border-color .14s ease, color .14s ease; }
+        .rs-tap:hover { border-color: currentColor; }
+
+        .mud-table-head th { color: #C6C9D1 !important; background: #111116 !important; font-size: 0.72rem !important;
+                             letter-spacing: 0.6px; text-transform: uppercase; }
+
+        .rs-legend { color: #8B8F98; font-size: 0.68rem; letter-spacing: 0.8px; width: 46px; }
+
+        /* Everything above is decoration, so honour reduced motion. */
         @@media (prefers-reduced-motion: reduce) {
             .rs-eq span, .rs-in, .rs-stat { animation: none !important; opacity: 1 !important; transform: none !important; }
             .rs-card, .rs-pick, .rs-row { transition: none !important; }
         }
 
-        .rs-navlink { border-radius: 8px; padding: 6px 14px; text-decoration: none; font-weight: 500; color: #9A9AA2; }
-        .rs-navlink:hover { background: #212127; color: #ECECEE; }
-        .rs-navlink-active { background: #2A2A30; color: #F0A202; }
+        /* The native file input cannot be restyled, so it hides inside a label. */
+        .rs-upload { display: inline-flex; align-items: center; cursor: pointer; border-radius: 8px;
+                     border: 1px solid #3A3A45; color: #B4B7BF; padding: 5px 14px; font-size: 0.82rem;
+                     font-weight: 500; transition: border-color .18s ease, color .18s ease; }
+        .rs-upload:hover { border-color: #5B9CFF; color: #F4F5F7; }
+        .rs-upload input[type=file] { display: none; }
 
-        /* Sits above content without pushing layout when it appears and disappears. */
+        .rs-slot { background: #15151A; color: #F4F5F7; border: 1px solid #2C2C35; border-radius: 6px;
+                   padding: 4px 8px; font-size: 0.8rem; width: 170px; }
+        .rs-slot:hover { border-color: #3A3A45; }
+
+        .rs-navlink { border-radius: 8px; padding: 6px 14px; text-decoration: none; font-weight: 500; color: #B4B7BF; }
+        .rs-navlink:hover { background: #1C1C22; color: #F4F5F7; }
+        .rs-navlink-active { background: #2C2C35; color: #F4F5F7; }
+
         .rs-savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1400;
-                      border-top: 1px solid #F0A202; background: #0E0E10;
+                      border-top: 1px solid #3A3A45; background: #08080A;
                       animation: rs-slide-up 0.28s cubic-bezier(.22,.61,.36,1); }
         @@keyframes rs-slide-up { from { transform: translateY(100%); } to { transform: none; } }
 
-        /* Slow pulse on the unsaved dot, enough to catch the eye without nagging. */
         .rs-pulse { animation: rs-pulse 2s ease-in-out infinite; }
         @@keyframes rs-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
         @@media (prefers-reduced-motion: reduce) {
             .rs-savebar, .rs-pulse { animation: none !important; }
+        }
+
+        /* Phones: compact nav, and the weapon table drops columns its card subtitle already shows. */
+        @@media (max-width: 599.98px) {
+            .rs-hide-xs { display: none !important; }
+            .rs-navlink { padding: 6px 8px; font-size: 0.85rem; white-space: nowrap; }
+            .rs-wtable tr.mud-table-row { display: block; padding: 8px 0; border-bottom: 1px solid #2C2C35; }
+            .rs-wtable .mud-table-cell { border-bottom: none !important; padding: 2px 14px !important; justify-content: flex-start !important; }
+            .rs-wtable .mud-table-cell::before { display: none !important; }
+        }
+        @@media (min-width: 600px) {
+            .rs-only-xs { display: none !important; }
         }
     </style>
 </HeadContent>
@@ -78,9 +107,9 @@
 <MudDialogProvider/>
 
 <MudLayout>
-    @* No drawer: two pages do not need a hamburger, and inline nav is one click instead of two. *@
-    <MudAppBar Dense Elevation="0" Style="border-bottom: 1px solid #2A2A30;">
-        <div class="rs-eq mr-3">
+    @* No drawer: three pages fit inline. *@
+    <MudAppBar Dense Elevation="0" Style="border-bottom: 1px solid #2C2C35;">
+        <div class="rs-eq mr-3 rs-hide-xs">
             <span style="height: 40%"></span>
             <span style="height: 85%"></span>
             <span style="height: 60%"></span>
@@ -88,12 +117,14 @@
             <span style="height: 45%"></span>
         </div>
         <MudText Typo="Typo.h6" Style="font-weight: 600; letter-spacing: -0.4px;">Resound</MudText>
-        <MudText Typo="Typo.caption" Class="ml-2" Style="color: #6E6E76;">sound packs</MudText>
+        <MudText Typo="Typo.caption" Class="ml-2 rs-hide-xs" Style="color: #8B8F98;">sound packs</MudText>
 
-        <MudDivider Vertical FlexItem Class="mx-4 my-3"/>
+        <MudDivider Vertical FlexItem Class="mx-4 my-3 rs-hide-xs"/>
+        <span class="mx-1 rs-only-xs"></span>
 
         <a href="/resound" class="rs-navlink @Active("/resound")">Overview</a>
         <a href="/resound/weapons" class="rs-navlink ml-1 @Active("/resound/weapons")">Per weapon</a>
+        <a href="/resound/build" class="rs-navlink ml-1 @Active("/resound/build")">Make a pack</a>
 
         <MudSpacer/>
 
@@ -102,7 +133,8 @@
         </MudTooltip>
     </MudAppBar>
 
-    <MudMainContent Class="pt-4" Style="padding-bottom: 88px;">
+    @* The bar is fixed, so the top padding has to clear it as well as space the page. *@
+    <MudMainContent Style="padding-top: 65px; padding-bottom: 88px;">
         <CascadingValue Value="this">
             @Body
         </CascadingValue>

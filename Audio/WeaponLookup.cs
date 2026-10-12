@@ -1,12 +1,11 @@
 using System.Reflection;
+using EFT;
 using EFT.InventoryLogic;
 using HarmonyLib;
 
 namespace Resound.Audio
 {
-    // Both public Init overloads assign playersBridge before the virtual Init runs, so the
-    // bridge is the one accessor that resolves the weapon for the local player, bots and
-    // Fika peers through a single code path.
+    // playersBridge is set before the virtual Init, so it resolves the weapon for players, bots and Fika peers alike.
     internal static class WeaponLookup
     {
         private static readonly FieldInfo BridgeField =

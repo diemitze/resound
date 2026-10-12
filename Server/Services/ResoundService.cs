@@ -1,20 +1,19 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using ResoundServer.Models;
 using SPTarkov.DI.Annotations;
-using SPTarkov.Server.Core.Helpers;
-using SPTarkov.Server.Core.Models.Utils;
-using SPTarkov.Server.Core.Services;
+using SPTarkov.Common.Models.Logging;
+using SPTarkov.Server.Core.Helpers.Server;
+using SPTarkov.Server.Core.Models.Spt.Tables;
 
 namespace ResoundServer.Services;
 
-
+// State shared by the pages and the client routes: weapons, installed packs, saved picks.
 [Injectable(InjectionType.Singleton)]
 public class ResoundService
 {
     public const string BuiltinId = "builtin";
 
-    private const string ManifestName = "resound.pack.json";
     private const int MaxScanDepth = 3;
 
     private static readonly string[] JunkMarkers = ["test", "debug", "dummy", "_dev_", "placeholder"];
@@ -25,7 +24,8 @@ public class ResoundService
         PropertyNameCaseInsensitive = true
     };
 
-    private readonly DatabaseService _database;
+    private readonly TemplateTable _templates;
+    private readonly LocaleTable _locales;
     private readonly ISptLogger<ResoundService> _logger;
     private readonly string _configPath;
 
@@ -33,9 +33,13 @@ public class ResoundService
 
     public ResoundWebConfig Config { get; private set; } = new();
 
-    public ResoundService(DatabaseService database, ModHelper modHelper, ISptLogger<ResoundService> logger)
+    /// <summary>Where packs are read from. Null finds the real BepInEx/plugins; tests point it elsewhere.</summary>
+    public string? PluginsRootOverride { get; set; }
+
+    public ResoundService(TemplateTable templates, LocaleTable locales, ModHelper modHelper, ISptLogger<ResoundService> logger)
     {
-        _database = database;
+        _templates = templates;
+        _locales = locales;
         _logger = logger;
 
         var modFolder = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
@@ -75,10 +79,7 @@ public class ResoundService
         }
     }
 
-    /// <summary>
-    /// Every weapon in the game. WeapClass is only ever set on weapons, so it doubles as the
-    /// filter and as the grouping the sound sets already use.
-    /// </summary>
+    /// <summary>Every weapon in the game. Only weapons carry a WeapClass.</summary>
     public List<WeaponRow> GetWeapons()
     {
         if (_weapons is not null)
@@ -87,10 +88,9 @@ public class ResoundService
         var rows = new List<WeaponRow>();
         var locale = GetEnglishLocale();
 
-        foreach (var (id, item) in _database.GetItems())
+        foreach (var (id, item) in _templates.Items)
         {
-            // Categories ("Smg", "Shotgun", "Weapon") are Nodes that real weapons inherit from.
-            // They carry a WeapClass like anything else, so they have to be excluded structurally.
+            // Category nodes carry a WeapClass too, so they are excluded structurally.
             if (!string.Equals(item.Type, "Item", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -98,16 +98,13 @@ public class ResoundService
             if (props is null || string.IsNullOrEmpty(props.WeapClass))
                 continue;
 
-            // BSG ships debug entries sitting in real weapon categories, "Master Hand"
-            // (weapon_test_consumable_items) being the visible one. Filter by pattern rather
-            // than by id, because content mods bring their own test items along.
+            // BSG and content mods ship test items in real categories, so filter by pattern rather than id.
             if (IsJunk(item.Name))
                 continue;
 
             var key = id.ToString();
 
-            // The locale table is the only place the player-facing name lives. props.ShortName
-            // and item.Name are internal ("weapon_hk_416a5_556x45"), which is unreadable in a list.
+            // Only the locale table has the player-facing name; ShortName is internal.
             locale.TryGetValue($"{key} Name", out var full);
             locale.TryGetValue($"{key} ShortName", out var shortName);
 
@@ -133,14 +130,11 @@ public class ResoundService
         return rows;
     }
 
-    /// <summary>
-    /// Packs live client-side under BepInEx/plugins/Resound, so this walks up out of the server
-    /// folder to find them. Same machine in every SPT install, but guarded in case that changes.
-    /// </summary>
+    /// <summary>Packs are client-side, so walk up out of the server folder to find them.</summary>
     public List<PackRow> GetPacks()
     {
         var packs = new List<PackRow>();
-        var pluginsDir = FindPluginsDir();
+        var pluginsDir = PluginsRootOverride ?? SptPaths.FindPluginsDir();
 
         if (pluginsDir is null)
         {
@@ -148,9 +142,7 @@ public class ResoundService
             return packs;
         }
 
-        // The shipped sounds predate the pack format and still live in mapping.json, exactly as
-        // the client reads them. Without this the server sees no built-ins and calls every weapon
-        // vanilla, which is worse than useless: the page would confidently contradict the game.
+        // The shipped sounds are still in mapping.json; without them every weapon would look vanilla.
         var builtin = ReadBuiltin(pluginsDir);
         if (builtin is not null)
             packs.Add(builtin);
@@ -159,17 +151,7 @@ public class ResoundService
         {
             try
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
-                var root = doc.RootElement;
-
-                packs.Add(new PackRow
-                {
-                    Id = GetString(root, "id") ?? Path.GetFileName(Path.GetDirectoryName(manifest)) ?? "unknown",
-                    Name = GetString(root, "name") ?? "",
-                    Author = GetString(root, "author") ?? "",
-                    Priority = root.TryGetProperty("priority", out var p) && p.TryGetInt32(out var pv) ? pv : 0,
-                    Rules = ReadRules(root)
-                });
+                packs.Add(PackManifest.Read(manifest));
             }
             catch (Exception ex)
             {
@@ -204,27 +186,33 @@ public class ResoundService
             var pack = new PackRow
             {
                 Id = BuiltinId,
+                Directory = Path.Join(pluginsDir, "Resound"),
                 Name = "Resound",
-                // Matches the client: the shipped sounds are the floor, so anything the user
-                // installs outranks them.
+                // The shipped sounds are mixed by hand, so their volume numbers are literal.
+                AutoLevel = false,
+                // The floor, as on the client.
                 Priority = -100
             };
 
             foreach (var w in weapons.EnumerateArray())
             {
-                pack.Rules.Add(new PackRule
+                var rule = new PackRule
                 {
-                    Name = GetString(w, "name") ?? "",
-                    SoundSet = GetString(w, "soundSet") ?? "",
+                    Name = PackManifest.GetString(w, "name") ?? "",
+                    SoundSet = PackManifest.GetString(w, "soundSet") ?? "",
                     Enabled = !w.TryGetProperty("enabled", out var en) || en.ValueKind != JsonValueKind.False,
-                    TemplateId = GetString(w, "templateId"),
-                    BodyVolume = GetFloat(w, "bodyVolume") ?? 1f,
-                    TailVolume = GetFloat(w, "tailVolume") ?? 1f,
-                    BodySilencedVolume = GetFloat(w, "bodySilencedVolume"),
-                    TailSilencedVolume = GetFloat(w, "tailSilencedVolume"),
-                    EventVolume = GetFloat(w, "eventVolume") ?? 1f,
-                    DecayBeats = GetFloat(w, "decayBeats")
-                });
+                    BodyVolume = PackManifest.GetFloat(w, "bodyVolume") ?? 1f,
+                    TailVolume = PackManifest.GetFloat(w, "tailVolume") ?? 1f,
+                    BodySilencedVolume = PackManifest.GetFloat(w, "bodySilencedVolume"),
+                    TailSilencedVolume = PackManifest.GetFloat(w, "tailSilencedVolume"),
+                    EventVolume = PackManifest.GetFloat(w, "eventVolume") ?? 1f,
+                    DecayBeats = PackManifest.GetFloat(w, "decayBeats"),
+                    AutoLevel = w.TryGetProperty("autoLevel", out var al) && al.ValueKind == JsonValueKind.True
+                };
+
+                // The match fields sit on the entry itself here, not under "match".
+                PackManifest.ApplyMatch(w, rule);
+                pack.Rules.Add(rule);
             }
 
             return pack;
@@ -236,56 +224,7 @@ public class ResoundService
         }
     }
 
-    private static List<PackRule> ReadRules(JsonElement root)
-    {
-        var rules = new List<PackRule>();
-
-        if (!root.TryGetProperty("entries", out var entries) || entries.ValueKind != JsonValueKind.Array)
-            return rules;
-
-        foreach (var e in entries.EnumerateArray())
-        {
-            var rule = new PackRule
-            {
-                Name = GetString(e, "name") ?? "",
-                SoundSet = GetString(e, "soundSet") ?? "",
-                Enabled = !e.TryGetProperty("enabled", out var en) || en.ValueKind != JsonValueKind.False,
-                BodyVolume = GetFloat(e, "bodyVolume") ?? 1f,
-                TailVolume = GetFloat(e, "tailVolume") ?? 1f,
-                BodySilencedVolume = GetFloat(e, "bodySilencedVolume"),
-                TailSilencedVolume = GetFloat(e, "tailSilencedVolume"),
-                EventVolume = GetFloat(e, "eventVolume") ?? 1f,
-                DecayBeats = GetFloat(e, "decayBeats")
-            };
-
-            if (e.TryGetProperty("match", out var m) && m.ValueKind == JsonValueKind.Object)
-            {
-                rule.TemplateId = GetString(m, "templateId");
-                rule.ParentId = GetString(m, "parentId");
-                rule.WeapClass = GetString(m, "weapClass");
-                rule.Caliber = GetString(m, "caliber");
-                rule.NamePattern = GetString(m, "namePattern");
-
-                if (m.TryGetProperty("templateIds", out var ids) && ids.ValueKind == JsonValueKind.Array)
-                {
-                    rule.TemplateIds = ids.EnumerateArray()
-                        .Where(x => x.ValueKind == JsonValueKind.String)
-                        .Select(x => x.GetString()!)
-                        .ToList();
-                }
-            }
-
-            rules.Add(rule);
-        }
-
-        return rules;
-    }
-
-    /// <summary>
-    /// Works out what a weapon actually sounds like, mirroring the client's rule: an explicit
-    /// pin wins, then priority, then specificity. If these two ever disagree the page is lying,
-    /// so they have to be changed together.
-    /// </summary>
+    /// <summary>What a weapon plays: pin, then priority, then specificity. Must match the client's rule.</summary>
     public Effective Resolve(WeaponRow weapon, List<PackRow> packs)
     {
         var winner = ResolveRule(weapon, packs);
@@ -303,10 +242,7 @@ public class ResoundService
         };
     }
 
-    /// <summary>
-    /// The whole decision table, which is what makes the server the single source of truth: the
-    /// client stops matching weapons itself and just looks answers up.
-    /// </summary>
+    /// <summary>The full decision table the client looks answers up in.</summary>
     public Dictionary<string, ResolvedSound> BuildResolutionMap()
     {
         var packs = GetPacks();
@@ -330,11 +266,71 @@ public class ResoundService
                 BodySilencedVolume = rule.BodySilencedVolume,
                 TailSilencedVolume = rule.TailSilencedVolume,
                 EventVolume = rule.EventVolume,
-                DecayBeats = rule.DecayBeats
+                DecayBeats = rule.DecayBeats,
+                AutoLevel = rule.AutoLevel
             };
         }
 
         return map;
+    }
+
+    /// <summary>The winning pack and entry with the numbers behind them, for the builder's outrank check.</summary>
+    public (PackRow Pack, PackRule Rule)? Winner(WeaponRow weapon, List<PackRow> packs)
+    {
+        return ResolveRule(weapon, packs);
+    }
+
+    /// <summary>Every pack with a sound for this weapon, best first. Offering one that does not cover it would pin the gun to silence.</summary>
+    public List<(PackRow Pack, PackRule Rule)> Candidates(WeaponRow weapon, List<PackRow> packs)
+    {
+        var found = new List<(PackRow Pack, PackRule Rule)>();
+
+        foreach (var pack in packs)
+        {
+            // Every set, not just the winner: a second set for the same gun is how a pack offers a choice.
+            var rules = pack.Rules
+                .Where(r => r.Enabled && !string.IsNullOrEmpty(r.SoundSet) && r.Specificity > 0 && r.Matches(weapon))
+                .GroupBy(r => r.SoundSet, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(r => r.Specificity).First());
+
+            foreach (var rule in rules)
+                found.Add((pack, rule));
+        }
+
+        // The order Auto would pick them in, so the first chip is the one Auto already plays.
+        return found
+            .OrderByDescending(c => c.Pack.Priority)
+            .ThenByDescending(c => c.Rule.Specificity)
+            .ThenBy(c => c.Pack.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Whether these numbers would take a weapon off its current holder: priority, specificity, then pack id.</summary>
+    public static bool Outranks(int priority, int specificity, string id, PackRow held, PackRule by)
+    {
+        if (priority != held.Priority)
+            return priority > held.Priority;
+
+        if (specificity != by.Specificity)
+            return specificity > by.Specificity;
+
+        return string.Compare(id, held.Id, StringComparison.OrdinalIgnoreCase) < 0;
+    }
+
+    /// <summary>A pin is a pack id, or packId::soundSet when the pack offers a choice. A bare id means its best entry.</summary>
+    public const string PinSeparator = "::";
+
+    public static string Pin(string packId, string? soundSet)
+    {
+        return string.IsNullOrEmpty(soundSet) ? packId : packId + PinSeparator + soundSet;
+    }
+
+    public static (string PackId, string? SoundSet) SplitPin(string pin)
+    {
+        var at = pin.IndexOf(PinSeparator, StringComparison.Ordinal);
+        return at < 0
+            ? (pin, null)
+            : (pin[..at], pin[(at + PinSeparator.Length)..]);
     }
 
     // The one place the rules live. Everything else, including the page, reads this.
@@ -345,9 +341,12 @@ public class ResoundService
             if (string.Equals(pinned, "Vanilla", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var pack = packs.FirstOrDefault(p => p.Id.Equals(pinned, StringComparison.OrdinalIgnoreCase));
+            var (pinnedPack, pinnedSet) = SplitPin(pinned);
+
+            var pack = packs.FirstOrDefault(p => p.Id.Equals(pinnedPack, StringComparison.OrdinalIgnoreCase));
             var rule = pack?.Rules
                 .Where(r => r.Enabled && !string.IsNullOrEmpty(r.SoundSet) && r.Matches(weapon))
+                .Where(r => pinnedSet is null || r.SoundSet.Equals(pinnedSet, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(r => r.Specificity)
                 .FirstOrDefault();
 
@@ -394,7 +393,7 @@ public class ResoundService
     {
         try
         {
-            var global = _database.GetLocales().Global;
+            var global = _locales.Global;
 
             if (global.TryGetValue("en", out var lazy) && lazy.Value is { } dict)
                 return dict;
@@ -424,41 +423,13 @@ public class ResoundService
         return "";
     }
 
-    private static string? GetString(JsonElement root, string name)
-    {
-        return root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-    }
-
-    private static float? GetFloat(JsonElement root, string name)
-    {
-        return root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetSingle(out var f)
-            ? f
-            : null;
-    }
-
-    private static string? FindPluginsDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (dir is not null)
-        {
-            var candidate = Path.Join(dir.FullName, "BepInEx", "plugins");
-            if (Directory.Exists(candidate))
-                return candidate;
-
-            dir = dir.Parent;
-        }
-
-        return null;
-    }
-
     private static IEnumerable<string> FindManifests(string dir, int depth)
     {
         if (depth > MaxScanDepth || !Directory.Exists(dir))
             yield break;
 
         // A manifest claims its whole folder, so stop rather than nest packs.
-        var candidate = Path.Join(dir, ManifestName);
+        var candidate = Path.Join(dir, PackManifest.FileName);
         if (File.Exists(candidate))
         {
             yield return candidate;

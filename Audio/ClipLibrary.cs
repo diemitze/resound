@@ -43,8 +43,7 @@ namespace Resound.Audio
         private static readonly Dictionary<string, SoundSet> Cache =
             new Dictionary<string, SoundSet>(StringComparer.OrdinalIgnoreCase);
 
-        // Counts files only. AudioClip.Create during plugin Awake returns zero-length
-        // clips that cache as successful and play nothing, so clips are built on first use.
+        // Counts files only: AudioClip.Create during Awake yields empty clips, so clips are built on first use.
         public static int Scan(string setDir)
         {
             if (string.IsNullOrEmpty(setDir) || !Directory.Exists(setDir))
@@ -93,8 +92,7 @@ namespace Resound.Audio
             return true;
         }
 
-        // Keyed on the full directory, not the set name, or two packs shipping a set called
-        // m4a1 would silently share one another's clips.
+        // Keyed on the full directory, or two packs with a set called m4a1 would share clips.
         public static SoundSet Get(string setDir)
         {
             if (string.IsNullOrEmpty(setDir))
@@ -154,12 +152,7 @@ namespace Resound.Audio
             if (set.Body == null)
                 set.Body = LoadFolder(dir);
 
-            // Fall back to unsuppressed, not vanilla, or fitting a can flips the gun back.
-            // Tail is deliberately excluded: inheriting an unsuppressed tail puts a full-volume
-            // crack after a quiet body, so vanilla's short suppressed tail stays unless a set
-            // ships tail_silenced/ itself.
-            if (set.BodySilenced == null) set.BodySilenced = set.Body;
-            if (set.DoubletSilenced == null) set.DoubletSilenced = set.Doublet;
+            // No suppressed sample: keep vanilla's body and tail, since the unsuppressed crack with a can fitted sounds wrong.
 
             if (set.IsEmpty)
             {
@@ -170,8 +163,7 @@ namespace Resound.Audio
             return set;
         }
 
-        // One subfolder per event name; the folder name is matched against SoundElement.EventName
-        // verbatim, because BSG's names are per weapon class and sets are already per class.
+        // Folder names are matched verbatim against SoundElement.EventName.
         private static Dictionary<string, AudioClip[]> LoadEvents(string eventsDir)
         {
             if (!Directory.Exists(eventsDir))

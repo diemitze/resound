@@ -1,0 +1,124 @@
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+
+@* Picks the weapons a set claims, with the same search and chips as the weapons page. *@
+
+<div class="d-flex align-center gap-3 flex-wrap mb-2">
+    <MudTextField @bind-Value="_search" Immediate="true" Clearable="true"
+                  Placeholder="Search name, id or caliber" Variant="Variant.Outlined"
+                  Margin="Margin.Dense" Style="max-width: 320px;"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"/>
+
+    <MudSpacer/>
+
+    <MudText Typo="Typo.caption" Style="color: #8B8F98;">
+        @Selected.Count selected of @Weapons.Count
+    </MudText>
+
+    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+               Disabled="@(Filtered.Count == 0)" OnClick="AddShown">
+        Add these @Filtered.Count
+    </MudButton>
+
+    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
+               Disabled="@(Selected.Count == 0)" OnClick="ClearAll">Clear</MudButton>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-3 align-center">
+    <MudChip T="string" Size="Size.Small" Variant="@Chip(null)" Color="Color.Primary"
+             OnClick="@(() => _classFilter = null)">all</MudChip>
+    @foreach (var c in _classes)
+    {
+        var cls = c;
+        <MudChip T="string" Size="Size.Small" Variant="@Chip(cls)" Color="Color.Primary"
+                 OnClick="@(() => _classFilter = cls)">@Labels.Class(cls)</MudChip>
+    }
+</div>
+
+@if (Filtered.Count == 0)
+{
+    <MudText Typo="Typo.body2" Style="color: #8B8F98;">Nothing matches that.</MudText>
+}
+else
+{
+    @* Several hundred rows once content mods are installed, so this has to be virtualized. *@
+    <div style="max-height: 320px; overflow-y: auto; border: 1px solid #2C2C35; border-radius: 6px;">
+        <Virtualize Items="Filtered" Context="w" ItemSize="36">
+            <div class="d-flex align-center px-2 rs-pick" style="height: 36px;"
+                 @onclick="@(() => Toggle(w.Id))">
+                <MudCheckBox T="bool" Value="@Selected.Contains(w.Id)" Dense="true" Color="Color.Primary"
+                             ValueChanged="@(_ => Toggle(w.Id))"/>
+                <MudText Typo="Typo.body2" Style="flex: 1;">@w.Name</MudText>
+                <MudText Typo="Typo.caption" Style="color: #8B8F98; width: 110px;">@Labels.Class(w.WeapClass)</MudText>
+                <MudText Typo="Typo.caption" Class="rs-mono" Style="color: #8B8F98; width: 90px;">
+                    @Labels.Calibre(w.Caliber)
+                </MudText>
+            </div>
+        </Virtualize>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<WeaponRow> Weapons { get; set; } = new();
+
+    /// <summary>Mutated in place; <see cref="OnChanged"/> fires after every edit.</summary>
+    [Parameter, EditorRequired] public HashSet<string> Selected { get; set; } = new();
+
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string? _search;
+    private string? _classFilter;
+    private List<string> _classes = new();
+
+    protected override void OnParametersSet()
+    {
+        _classes = Weapons.Select(w => w.WeapClass).Distinct().OrderBy(c => c).ToList();
+    }
+
+    private List<WeaponRow> Filtered
+    {
+        get
+        {
+            IEnumerable<WeaponRow> q = Weapons;
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.Trim();
+                q = q.Where(w => w.Name.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || w.ShortName.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || w.Id.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || w.Caliber.Contains(s, StringComparison.OrdinalIgnoreCase)
+                                 || Labels.Calibre(w.Caliber).Contains(s, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrEmpty(_classFilter))
+                q = q.Where(w => w.WeapClass == _classFilter);
+
+            return q.ToList();
+        }
+    }
+
+    private Variant Chip(string? cls) => _classFilter == cls ? Variant.Filled : Variant.Outlined;
+
+    private async Task Toggle(string id)
+    {
+        if (!Selected.Remove(id))
+            Selected.Add(id);
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task AddShown()
+    {
+        foreach (var w in Filtered)
+            Selected.Add(w.Id);
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task ClearAll()
+    {
+        Selected.Clear();
+        await OnChanged.InvokeAsync();
+    }
+
+}

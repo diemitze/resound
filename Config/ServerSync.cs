@@ -1,12 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using SPT.Common.Http;
 
 namespace Resound.Config
 {
-    // One row of the server's decision table. Carries a pack id and set name rather than a path,
-    // because under Fika the server can be on a different machine to the player.
+    // Pack id and set name, not a path: under Fika the server may be another machine.
     internal class ResolvedSound
     {
         [JsonProperty("packId")]
@@ -35,11 +34,12 @@ namespace Resound.Config
 
         [JsonProperty("decayBeats")]
         public float? DecayBeats;
+
+        [JsonProperty("autoLevel")]
+        public bool AutoLevel = true;
     }
 
-    // Asks the server which pack wins for each weapon. The server owns that decision so there is
-    // only ever one implementation of the rules; the client just maps the answer onto the packs
-    // it can actually see on its own disk.
+    // The server owns the matching rules so there is one implementation; the client maps its answer onto local packs.
     internal static class ServerSync
     {
         public const string Route = "/resound/resolve";
@@ -70,8 +70,7 @@ namespace Resound.Config
             }
             catch (Exception e)
             {
-                // No server half installed, or an older one. Local matching still works, so this
-                // is a downgrade rather than a failure.
+                // No server half, or an older one. Local matching still works.
                 Plugin.Log.LogInfo("No Resound server config (" + e.GetType().Name + "), using local matching.");
                 return null;
             }

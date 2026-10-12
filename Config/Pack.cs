@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using EFT;
 using EFT.InventoryLogic;
 using Newtonsoft.Json;
 
 namespace Resound.Config
 {
-    // What a weapon has to look like for an entry to claim it. Every field set has to match,
-    // and the more fields are set the more specific the entry is when two packs collide.
+    // Every set field must match; more fields make the entry more specific.
     internal class WeaponMatch
     {
         [JsonProperty("templateId")]
@@ -19,8 +19,7 @@ namespace Resound.Config
         [JsonProperty("parentId")]
         public string ParentId;
 
-        // BSG's own class string: assaultRifle, assaultCarbine, smg, pistol, shotgun,
-        // sniperRifle, marksmanRifle, machinegun. Sound sets already partition this way.
+        // BSG's own class string (assaultRifle, smg, pistol, ...).
         [JsonProperty("weapClass")]
         public string WeapClass;
 
@@ -34,8 +33,7 @@ namespace Resound.Config
         private Regex _name;
         private bool _nameBad;
 
-        // Weighted so that naming an exact weapon always beats naming a whole class, and
-        // narrowing by two criteria beats narrowing by one.
+        // An exact weapon always beats a whole class; two criteria beat one.
         public int Specificity
         {
             get
@@ -173,12 +171,15 @@ namespace Resound.Config
 
         [JsonProperty("decayBeats")]
         public float? DecayBeats;
+
+        // Null follows the pack; per entry is for a deliberately off-level sample.
+        [JsonProperty("autoLevel")]
+        public bool? AutoLevel;
     }
 
     internal class Pack
     {
-        // Highest apiVersion this build understands. A pack declaring more is skipped whole
-        // rather than half-loaded, because the fields it needs would silently read as defaults.
+        // A pack declaring more is skipped whole, not half-loaded with its new fields read as defaults.
         public const int SupportedApiVersion = 1;
 
         [JsonProperty("id")]
@@ -195,6 +196,10 @@ namespace Resound.Config
 
         [JsonProperty("priority")]
         public int Priority = 0;
+
+        // On by default: an author who set no volumes most likely has raw source-game audio.
+        [JsonProperty("autoLevel")]
+        public bool AutoLevel = true;
 
         [JsonProperty("entries")]
         public List<PackEntry> Entries = new List<PackEntry>();
@@ -215,5 +220,6 @@ namespace Resound.Config
         public float? TailSilencedVolume;
         public float EventVolume;
         public float? DecayBeats;
+        public bool AutoLevel;
     }
 }

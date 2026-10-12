@@ -8,7 +8,7 @@
     <RootNamespace>Resound</RootNamespace>
     <Nullable>disable</Nullable>
     <Authors>20fpsguy</Authors>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <AssemblyVersion>1.2.0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Configurations>Debug;Release</Configurations>
     <Version>$(AssemblyVersion)</Version>
@@ -19,31 +19,31 @@
 
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>D:\SPT dev\BepInEx\core\0Harmony.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\BepInEx\core\0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="spt-common">
-      <HintPath>D:\SPT dev\BepInEx\plugins\spt\spt-common.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\BepInEx\plugins\spt\spt-common.dll</HintPath>
     </Reference>
     <Reference Include="spt-reflection">
-      <HintPath>D:\SPT dev\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\BepInEx\plugins\spt\spt-reflection.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="BepInEx">
-      <HintPath>D:\SPT dev\BepInEx\core\BepInEx.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\BepInEx\core\BepInEx.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\Newtonsoft.Json.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\EscapeFromTarkov_Data\Managed\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\EscapeFromTarkov_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\EscapeFromTarkov_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.AudioModule">
-      <HintPath>D:\SPT dev\EscapeFromTarkov_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+      <HintPath>D:\SPT 4.1 dev\EscapeFromTarkov_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
     </Reference>
   </ItemGroup>
 
@@ -51,21 +51,34 @@
     <None Include="sounds\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- The client project globs **/*.cs, so anything living under it gets compiled in. The server
-       half is its own project and example/ is a reference clone; neither belongs in this build. -->
+  <!-- The default glob would pull in the server, tests and example/; none belong here. -->
   <ItemGroup>
     <Compile Remove="Server\**" />
     <None Remove="Server\**" />
+    <Compile Remove="Tests\**" />
+    <None Remove="Tests\**" />
     <Compile Remove="example\**" />
     <None Remove="example\**" />
   </ItemGroup>
 
-  <!-- Auto-deploy to a local SPT install. Skipped when that path does not exist, so cloning
-       and building this repo works without having SPT at the same location. -->
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('D:\SPT dev\BepInEx\plugins')">
-    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;D:\SPT dev\BepInEx\plugins\$(TargetFileName)&quot;" />
-    <MakeDir Directories="D:\SPT dev\BepInEx\plugins\Resound" />
-    <Exec Command="xcopy /E /I /Y &quot;$(ProjectDir)sounds&quot; &quot;D:\SPT dev\BepInEx\plugins\Resound\sounds&quot;" />
+  <!-- Deploys to the local SPT install when it exists. -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="Exists('D:\SPT 4.1 dev\BepInEx\plugins')">
+    <PropertyGroup>
+      <DeployDir>D:\SPT 4.1 dev\BepInEx\plugins</DeployDir>
+      <DeploySounds>$(DeployDir)\Resound\sounds</DeploySounds>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- Not mapping.json: the deployed copy is edited in place and must survive a build. -->
+      <DeployAudio Include="$(ProjectDir)sounds\**\*.*" Exclude="$(ProjectDir)sounds\mapping.json" />
+    </ItemGroup>
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DeployDir)" />
+    <MakeDir Directories="$(DeploySounds)" />
+    <Copy SourceFiles="@(DeployAudio)" DestinationFolder="$(DeploySounds)\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)sounds\mapping.json" DestinationFolder="$(DeploySounds)"
+          Condition="!Exists('$(DeploySounds)\mapping.json')" />
+    <Message Importance="high" Condition="Exists('$(DeploySounds)\mapping.json')"
+             Text="Resound: kept the mapping.json already in $(DeploySounds)." />
   </Target>
 
   <Target Name="PackageModForDistribution" AfterTargets="Build">
@@ -74,13 +87,11 @@
       <ZipFileName>$(ModName).zip</ZipFileName>
       <TempPackageDir>$(ProjectDir)obj\Package</TempPackageDir>
       <ModPackageDir>$(TempPackageDir)\BepInEx\plugins</ModPackageDir>
-      <!-- Always Release: the Debug output carries a pdb and static web asset manifests that
-           have no business in a download. -->
+      <!-- Always Release, so no pdb or web asset manifests end up in the download. -->
       <ServerBuildDir>$(ProjectDir)Server\bin\Release\Resound.Server</ServerBuildDir>
-      <ServerPackageDir>$(TempPackageDir)\user\mods\Resound.Server</ServerPackageDir>
+      <ServerPackageDir>$(TempPackageDir)\SPT_Runtime\user\mods\Resound.Server</ServerPackageDir>
     </PropertyGroup>
     <ItemGroup>
-      <!-- Ship the audio with the mod so it works on install with nothing for the user to do. -->
       <SoundFiles Include="$(ProjectDir)sounds\**\*.*" />
     </ItemGroup>
     <Message Text="--- Starting Mod packaging for distribution ---" Importance="high" />
@@ -90,9 +101,7 @@
     <Copy SourceFiles="@(SoundFiles)"
           DestinationFolder="$(ModPackageDir)\Resound\sounds\%(RecursiveDir)" />
 
-    <!-- The server half is its own project on a different framework, so it is built here rather
-         than referenced. The user unzips both halves and deletes user/mods if they do not want
-         the config page. Failing to build it must not cost us the client zip. -->
+    <!-- Built here, not referenced (different framework). Failing must not cost the client zip. -->
     <MSBuild Projects="$(ProjectDir)Server\Resound.Server.csproj" Targets="Build"
              Properties="Configuration=Release" ContinueOnError="WarnAndContinue" />
     <ItemGroup>
@@ -101,6 +110,13 @@
     <Copy SourceFiles="@(ServerFiles)" DestinationFolder="$(ServerPackageDir)\%(RecursiveDir)" />
     <Warning Text="Server half not packaged: no build output in $(ServerBuildDir)."
              Condition="'@(ServerFiles)' == ''" />
+
+    <!-- Pack tools in their own folder, so extracting into SPT drops nothing in its root. -->
+    <ItemGroup>
+      <PackTools Include="$(ProjectDir)make_pack.ps1" />
+      <PackTools Include="$(ProjectDir)example-pack\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PackTools)" DestinationFolder="$(TempPackageDir)\Resound-pack-tools\%(RecursiveDir)" />
 
     <ZipDirectory SourceDirectory="$(TempPackageDir)" DestinationFile="$(ProjectDir)$(ZipFileName)" Overwrite="true" />
     <RemoveDir Directories="$(TempPackageDir)" />

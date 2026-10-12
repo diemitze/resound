@@ -10,14 +10,7 @@ using UnityEngine;
 
 namespace Resound.Patches
 {
-    // Reload and foley audio reaches the player as animator events:
-    //   OnSound(name) -> SoundEventHandler(name) -> searches AdditionalSounds -> PlayRandomClip
-    // EventReceiver and OnUseProp are two more entry points into the same funnel, so patching
-    // PlayRandomClip covers all three. Weapons keep everything in AdditionalSounds; MainSounds
-    // is empty on every weapon checked so far.
-    //
-    // Substituting here never writes to the prefab, which matters because prefabs are pooled;
-    // that is the whole reason BankSwapper needs its save/restore dance on the fire path.
+    // OnSound, EventReceiver and OnUseProp all end in PlayRandomClip. Substituting here never touches the pooled prefab.
     internal class EventSoundPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
@@ -28,8 +21,7 @@ namespace Resound.Patches
         private static readonly HashSet<string> Logged =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Logging lives here rather than in its own patch: a prefix returning false suppresses
-        // the remaining prefixes, so a separate logger would go quiet exactly when a swap fires.
+        // Logged here, not in its own patch: a prefix returning false would silence it.
         [PatchPrefix]
         private static bool Prefix(BaseSoundPlayer __instance, BaseSoundPlayer.SoundElement soundElement)
         {
@@ -63,8 +55,7 @@ namespace Resound.Patches
             if (clip == null || clip.length <= 0f)
                 return true;
 
-            // BSG's own Volume and RollOff carry per-event mixing (the MP-155 ranges 1.0 to 1.2),
-            // so scale them rather than replacing them, same principle as cloning the fire bank.
+            // Scale BSG's per-event Volume rather than replace it.
             __instance.PlayClip(clip, soundElement.RollOff, soundElement.Volume * profile.EventVolume);
 
             Plugin.Dbg("event swap: " + soundElement.EventName + " -> " + profile.Label +

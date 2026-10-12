@@ -4,10 +4,125 @@ using UnityEngine;
 
 namespace Resound.Audio
 {
-    // Minimal RIFF reader, PCM 8/16/24/32 and float32. Decoded here rather than via
-    // UnityWebRequestMultimedia because that path is async.
+    // Header facts only: the pack report runs before Unity can build a working AudioClip.
+    internal class WavInfo
+    {
+        public bool Ok;
+        public string Problem;   // null when Ok, a sentence aimed at a pack author otherwise
+        public string Note;      // Ok but worth saying, e.g. a stereo file that will be folded
+        public int Channels;
+        public int SampleRate;
+        public int Bits;
+        public int Format;
+        public float Duration;
+    }
+
+    // Decoded by hand because UnityWebRequestMultimedia is async.
     internal static class WavLoader
     {
+        private const int PCM = 1, FLOAT = 3, EXTENSIBLE = 0xFFFE;
+
+        // Header only, so unlike Load it is safe during Awake.
+        public static WavInfo Inspect(string path)
+        {
+            WavInfo info = new WavInfo();
+
+            try
+            {
+                using (FileStream fs = File.OpenRead(path))
+                using (BinaryReader r = new BinaryReader(fs))
+                {
+                    if (fs.Length < 12 || Tag(r) != "RIFF")
+                    {
+                        info.Problem = "not a WAV file (no RIFF header). Convert it to WAV.";
+                        return info;
+                    }
+
+                    r.ReadInt32();
+
+                    if (Tag(r) != "WAVE")
+                    {
+                        info.Problem = "not a WAV file. Convert it to WAV.";
+                        return info;
+                    }
+
+                    long dataLength = -1;
+
+                    while (fs.Position + 8 <= fs.Length)
+                    {
+                        string id = Tag(r);
+                        long size = (uint)r.ReadInt32();
+                        long body = fs.Position;
+
+                        if (id == "fmt " && size >= 16)
+                        {
+                            info.Format = r.ReadInt16();
+                            info.Channels = r.ReadInt16();
+                            info.SampleRate = r.ReadInt32();
+                            r.ReadInt32();  // byte rate
+                            r.ReadInt16();  // block align
+                            info.Bits = r.ReadInt16();
+
+                            // WAVE_FORMAT_EXTENSIBLE hides the real format in the GUID.
+                            if (info.Format == EXTENSIBLE && size >= 26)
+                            {
+                                fs.Position = body + 24;
+                                info.Format = r.ReadInt16();
+                            }
+                        }
+                        else if (id == "data")
+                        {
+                            dataLength = Math.Min(size, fs.Length - body);
+                        }
+
+                        fs.Position = body + size + (size & 1); // chunks are word-aligned
+                    }
+
+                    if (info.Channels <= 0 || info.SampleRate <= 0 || dataLength < 0)
+                    {
+                        info.Problem = "the WAV header is malformed or truncated. Re-export it.";
+                        return info;
+                    }
+
+                    if (info.Format != PCM && !(info.Format == FLOAT && info.Bits == 32))
+                    {
+                        info.Problem = "compressed WAV (format " + info.Format + "). Re-export as PCM " +
+                                       "16-bit; ADPCM and mp3-in-a-wav cannot be read.";
+                        return info;
+                    }
+
+                    if (info.Format == PCM && info.Bits != 8 && info.Bits != 16 &&
+                        info.Bits != 24 && info.Bits != 32)
+                    {
+                        info.Problem = info.Bits + "-bit audio is not supported. Re-export as PCM 16-bit.";
+                        return info;
+                    }
+
+                    int frameBytes = info.Channels * info.Bits / 8;
+                    if (frameBytes > 0)
+                        info.Duration = dataLength / (float)frameBytes / info.SampleRate;
+
+                    if (info.Duration <= 0f)
+                    {
+                        info.Problem = "there is no audio in the file (zero length).";
+                        return info;
+                    }
+
+                    if (info.Channels > 1)
+                        info.Note = info.Channels + " channels, folded to mono on load " +
+                                    "(Unity cannot place a stereo clip in 3D space)";
+
+                    info.Ok = true;
+                    return info;
+                }
+            }
+            catch (Exception e)
+            {
+                info.Problem = "could not be read: " + e.Message;
+                return info;
+            }
+        }
+
         public static AudioClip Load(string path)
         {
             byte[] raw;
@@ -48,8 +163,7 @@ namespace Resound.Audio
                     sampleRate = BitConverter.ToInt32(raw, body + 4);
                     bitsPerSample = BitConverter.ToInt16(raw, body + 14);
 
-                    // WAVE_FORMAT_EXTENSIBLE stores the real format in the GUID's first two bytes.
-                    if (format == 0xFFFE && size >= 26)
+                    if (format == EXTENSIBLE && size >= 26)
                         format = BitConverter.ToInt16(raw, body + 24);
                 }
                 else if (id == "data")
@@ -58,7 +172,7 @@ namespace Resound.Audio
                     dataLength = size;
                 }
 
-                pos = body + size + (size & 1); // chunks are word-aligned
+                pos = body + size + (size & 1);
             }
 
             if (dataOffset < 0 || channels <= 0 || sampleRate <= 0)
@@ -71,16 +185,41 @@ namespace Resound.Audio
             if (samples == null || samples.Length == 0)
                 return null;
 
+            // Unity will not spatialize a multi-channel clip, so stereo is folded rather than rejected.
+            if (channels > 1)
+            {
+                samples = ToMono(samples, channels);
+                Plugin.Dbg("Folded " + channels + " channels to mono: " + Path.GetFileName(path));
+                channels = 1;
+            }
+
             string name = Path.GetFileNameWithoutExtension(path);
-            AudioClip clip = AudioClip.Create(name, samples.Length / channels, channels, sampleRate, false);
+            AudioClip clip = AudioClip.Create(name, samples.Length, 1, sampleRate, false);
             clip.SetData(samples, 0);
             return clip;
         }
 
+        // Averaged, not summed, so a correlated stereo pair keeps its level instead of doubling.
+        private static float[] ToMono(float[] interleaved, int channels)
+        {
+            int frames = interleaved.Length / channels;
+            float[] mono = new float[frames];
+
+            for (int f = 0; f < frames; f++)
+            {
+                float sum = 0f;
+                int b = f * channels;
+                for (int c = 0; c < channels; c++)
+                    sum += interleaved[b + c];
+
+                mono[f] = sum / channels;
+            }
+
+            return mono;
+        }
+
         private static float[] Decode(byte[] raw, int offset, int length, int format, int bits, string path)
         {
-            const int PCM = 1, FLOAT = 3;
-
             if (format == FLOAT && bits == 32)
             {
                 float[] outp = new float[length / 4];
@@ -140,6 +279,12 @@ namespace Resound.Audio
         private static string Tag(byte[] b, int at)
         {
             return "" + (char)b[at] + (char)b[at + 1] + (char)b[at + 2] + (char)b[at + 3];
+        }
+
+        private static string Tag(BinaryReader r)
+        {
+            byte[] b = r.ReadBytes(4);
+            return b.Length < 4 ? "" : "" + (char)b[0] + (char)b[1] + (char)b[2] + (char)b[3];
         }
     }
 }

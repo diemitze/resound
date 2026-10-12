@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using EFT.InventoryLogic;
@@ -9,14 +9,12 @@ namespace Resound.Config
     // Finds sound packs, decides which one owns each weapon, and caches the answer.
     internal static class PackRegistry
     {
-        // Lets every installed pack compete on priority. Naming one pack instead is the answer to
-        // "I just want this pack", without anyone having to reason about numbers.
+        // Auto lets every pack compete; naming one is "I just want this pack".
         public const string Auto = "Auto";
 
         private const string ManifestName = "resound.pack.json";
 
-        // Packs live under plugins/Resound/, one folder each. Depth is for authors who ship a
-        // nested layout inside their own folder, not for hunting through the whole plugins tree.
+        // Depth is for a nested layout inside one pack's folder, not for searching all of plugins/.
         private const int MaxDepth = 3;
 
         // The built-in audio, hundreds of folders and never a manifest.
@@ -27,8 +25,7 @@ namespace Resound.Config
         private static readonly Dictionary<string, SoundProfile> Resolved =
             new Dictionary<string, SoundProfile>(StringComparer.OrdinalIgnoreCase);
 
-        // When the server half is installed its answer wins outright: it applied the same rules
-        // plus the per-weapon pins from the config page, which the client knows nothing about.
+        // The server's answer wins outright: same rules plus the config page's pins.
         private static Dictionary<string, ResolvedSound> _server;
 
         private static string _selected = Auto;
@@ -101,8 +98,7 @@ namespace Resound.Config
             Resolved.Clear();
         }
 
-        // Add-ons live in plugins/Resound/, beside the built-in sounds. One known folder means
-        // startup does not walk someone's whole plugins tree, and an install is unambiguous.
+        // One known folder, so startup never walks the whole plugins tree.
         public static void Discover(string resoundRoot)
         {
             foreach (string manifest in FindManifests(resoundRoot, 0))
@@ -113,8 +109,7 @@ namespace Resound.Config
             }
         }
 
-        // A pack dropped straight into plugins/ used to work, so say why it went quiet instead of
-        // leaving someone to wonder. One level deep only; this is a hint, not a second search.
+        // Packs dropped straight into plugins/ used to load, so name them rather than go quiet.
         public static void WarnMisplaced(string pluginsRoot, string resoundRoot)
         {
             string[] subs;
@@ -228,8 +223,7 @@ namespace Resound.Config
             Pack pack = FindPack(r.PackId);
             if (pack == null)
             {
-                // The server can only name packs it found on its own filesystem. Under Fika that
-                // may be a pack this player has not installed, so say so rather than fail quietly.
+                // Under Fika the server may name a pack this player has not installed.
                 Plugin.Log.LogWarning("Server picked pack '" + r.PackId + "' for " + templateId +
                                       ", which is not installed here. Staying vanilla.");
                 return null;
@@ -244,7 +238,8 @@ namespace Resound.Config
                 BodySilencedVolume = r.BodySilencedVolume,
                 TailSilencedVolume = r.TailSilencedVolume,
                 EventVolume = r.EventVolume,
-                DecayBeats = r.DecayBeats
+                DecayBeats = r.DecayBeats,
+                AutoLevel = r.AutoLevel
             };
 
             Plugin.Log.LogInfo("Resolved " + templateId + " -> " + profile.Label + " (server)");
@@ -274,8 +269,7 @@ namespace Resound.Config
             int bestScore = -1;
             bool builtinMatched = false;
 
-            // Naming a pack sidelines the others, but never the built-ins: a pack covering six
-            // guns should not drop the rest of the game back to vanilla.
+            // Naming a pack never sidelines the built-ins, or six covered guns would drop the rest to vanilla.
             bool restricted = !string.Equals(_selected, Auto, StringComparison.OrdinalIgnoreCase);
 
             foreach (Pack pack in Packs)
@@ -294,11 +288,7 @@ namespace Resound.Config
                     if (pack.Id == LegacyMapping.PackId)
                         builtinMatched = true;
 
-                    // Priority outranks specificity, which is what stops the shipped sounds from
-                    // stealing a weapon back off an installed pack: a CS:GO SMG pack should win
-                    // the MP7 even though the built-in entry names it exactly. Specificity only
-                    // decides between packs the user weighted the same, and packs are pre-sorted
-                    // by priority then id so equal pairs keep the earlier one.
+                    // Priority beats specificity, so an installed pack wins a gun the built-ins name exactly. Ties keep the earlier pack.
                     int score = entry.Match.Specificity;
                     if (pack.Priority < bestPriority ||
                         (pack.Priority == bestPriority && score <= bestScore))
@@ -324,10 +314,10 @@ namespace Resound.Config
                     BodySilencedVolume = bestEntry.BodySilencedVolume,
                     TailSilencedVolume = bestEntry.TailSilencedVolume,
                     EventVolume = bestEntry.EventVolume,
-                    DecayBeats = bestEntry.DecayBeats
+                    DecayBeats = bestEntry.DecayBeats,
+                    AutoLevel = bestEntry.AutoLevel ?? bestPack.AutoLevel
                 };
 
-                // Saying so explicitly beats leaving someone to work out why their pack is silent.
                 string note = builtinMatched && bestPack.Id != LegacyMapping.PackId
                     ? " (overrides built-in)"
                     : "";

@@ -1,0 +1,930 @@
+@page "/resound/build"
+@layout MainLayout
+@inject ResoundService Resound
+@inject PackBuilderService Builder
+@inject PackStaging Staging
+@inject AudioConverter Converter
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Components.Forms
+
+@* Making a pack without writing JSON: which guns, and what they sound like. *@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pt-6">
+
+    <MudText Typo="Typo.h5">Make a sound pack</MudText>
+    <MudText Typo="Typo.body2" Style="color: #B4B7BF;" Class="mt-1 mb-5">
+        Pick the weapons, point it at your rips, and this writes the finished pack into your
+        plugins folder. The pack works on its own: anyone can install it without the server mod.
+    </MudText>
+
+    @if (Editable.Count > 0)
+    {
+        <MudPaper Class="pa-4 mb-5 rs-in" Elevation="0" Style="--d:0s; border: 1px solid #2C2C35;">
+            <div class="d-flex align-center gap-3 flex-wrap">
+                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Style="color:#8B8F98;"/>
+                <MudText Typo="Typo.body2" Style="color: #B4B7BF;">Or pick up one you already have</MudText>
+
+                @* One click per pack; most people have one or two. *@
+                @foreach (var pack in Editable)
+                {
+                    var installed = pack;
+
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                             Variant="@(_opened == installed.Display ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => OpenPack(installed))">@installed.Display</MudChip>
+                }
+
+                <MudSpacer/>
+
+                @if (_opened is not null)
+                {
+                    <MudText Typo="Typo.caption" Style="color: #8B8F98;">
+                        editing @_opened &middot; building saves over it
+                    </MudText>
+                }
+            </div>
+        </MudPaper>
+    }
+
+    @* ------------------------------------------------------------------ 1. identity *@
+
+    <MudPaper Class="pa-6 mb-4 rs-in" Elevation="0" Style="--d:0s; border: 1px solid #2C2C35;">
+        <div class="d-flex align-center mb-4">
+            <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-3">1</MudAvatar>
+            <MudText Typo="Typo.h6">What is it called</MudText>
+        </div>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="7">
+                <MudTextField @bind-Value="_name" @bind-Value:after="OnNameChanged" Immediate="true"
+                              Label="What is your pack called?" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Placeholder="CS:GO Guns"/>
+            </MudItem>
+            <MudItem xs="12" sm="5">
+                <MudTextField @bind-Value="_author" Immediate="true" Label="Your name"
+                              Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Placeholder="whoever is making it"/>
+            </MudItem>
+        </MudGrid>
+
+        @* The id follows the name unless changed by hand. *@
+        @if (!string.IsNullOrEmpty(Slug))
+        {
+            <MudText Typo="Typo.caption" Class="d-block mt-3" Style="color: #8B8F98;">
+                goes in
+                <span class="rs-mono">@(Builder.TargetDirectory(Slug) ?? "BepInEx/plugins/Resound/" + Slug)</span>
+            </MudText>
+        }
+
+        @if (IdTaken)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mt-3">
+                You already have a pack called <b>@Slug</b>. Building saves over it. That is what
+                you want if it is yours; change the name if it is not.
+            </MudAlert>
+        }
+
+        <MudDivider Class="my-4"/>
+
+        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Default"
+                   EndIcon="@(_advanced ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                   OnClick="@(() => _advanced = !_advanced)">
+            @(_advanced ? "Fewer options" : "More options")
+        </MudButton>
+
+        @if (_advanced)
+        {
+            <div class="mt-4">
+                <MudTextField @bind-Value="_id" @bind-Value:after="OnIdEdited" Immediate="true"
+                              Label="Folder name" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Style="max-width: 280px;" Class="mb-4"
+                              HelperText="Taken from the pack name. Only change it if you have a reason."/>
+
+                <MudSelect T="int" Value="_priority" ValueChanged="OnPriorityChanged" Label="When another pack covers the same gun"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 480px;">
+                    <MudSelectItem T="int" Value="0">Compete normally, most specific wins</MudSelectItem>
+                    <MudSelectItem T="int" Value="-50">Only where no other pack covers the gun</MudSelectItem>
+                    <MudSelectItem T="int" Value="10">Always win, even over other packs</MudSelectItem>
+                    <MudSelectItem T="int" Value="int.MinValue">Something else</MudSelectItem>
+                </MudSelect>
+
+                @if (_customPriority)
+                {
+                    <MudNumericField T="int" @bind-Value="_priority" Label="Priority"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     Class="mt-3" Style="max-width: 200px;"/>
+                }
+
+                <MudText Typo="Typo.caption" Style="color: #8B8F98;" Class="mt-2 d-block">
+                    Always winning is rude by default. Say so on your download page if you use it.
+                </MudText>
+
+                <MudSwitch T="bool" @bind-Value="_autoLevel" Color="Color.Primary" Class="mt-4"
+                           Label="Match my clips to Tarkov's own loudness"/>
+                <MudText Typo="Typo.caption" Style="color: #8B8F98;" Class="d-block">
+                    Leave this on until you have tuned your volumes by ear. It is what makes raw
+                    audio out of another game sit correctly in the mix with nothing set.
+                </MudText>
+            </div>
+        }
+    </MudPaper>
+
+    @* ------------------------------------------------------------------ 2. sets *@
+
+    <MudPaper Class="pa-6 mb-4 rs-in" Elevation="0" Style="--d:.08s; border: 1px solid #2C2C35;">
+        <div class="d-flex align-center flex-wrap gap-2 mb-2">
+            <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1">2</MudAvatar>
+            <MudText Typo="Typo.h6">Which guns it changes</MudText>
+            <MudSpacer/>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Style="white-space: nowrap;"
+                       StartIcon="@Icons.Material.Filled.Add" OnClick="AddSet">Add a sound set</MudButton>
+        </div>
+
+        <MudText Typo="Typo.body2" Style="color: #B4B7BF;" Class="mb-4">
+            One set is one folder of audio. Give it a gun, a handful of guns, or a whole class.
+        </MudText>
+
+        @if (_sets.Count == 0)
+        {
+            <div class="d-flex flex-column align-center py-6" style="border: 1px dashed #2C2C35; border-radius: 8px;">
+                <MudIcon Icon="@Icons.Material.Outlined.GraphicEq" Size="Size.Large" Style="color:#3A3A45;"/>
+                <MudText Typo="Typo.body1" Class="mt-2">Nothing in this pack yet</MudText>
+                <MudText Typo="Typo.body2" Style="color: #B4B7BF;" Class="mb-4">
+                    A set is one folder of sounds and the guns it plays on.
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddSet">Add your first set</MudButton>
+            </div>
+        }
+
+        @foreach (var set in _sets)
+        {
+            var editor = set;
+            var claims = editor.Claims();
+            var stolen = Contested(editor, claims);
+
+            <MudPaper Class="pa-4 mb-3" Elevation="0" Style="border: 1px solid #2C2C35; background: #141418;">
+
+                @* Name and folder follow the picked weapons, so they are a heading, not two more fields. *@
+                <div class="d-flex align-center gap-2 flex-wrap">
+                    @if (editor.Renaming)
+                    {
+                        <MudTextField @bind-Value="editor.Draft.Rule.Name" Immediate="true" Label="Set name"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 240px;"/>
+
+                        <MudTextField Value="@editor.Draft.SoundSet" Immediate="true" Label="Folder"
+                                      ValueChanged="@((string v) => Edit(editor, e => e.NameFolder(v)))"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 200px;"
+                                      T="string"/>
+
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                   OnClick="@(() => editor.Renaming = false)">Done</MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.subtitle1">@Label(editor)</MudText>
+                        <MudText Typo="Typo.caption" Class="rs-mono" Style="color: #8B8F98;">
+                            sounds/@editor.Draft.SoundSet
+                        </MudText>
+
+                        <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small"
+                                       title="Rename it" OnClick="@(() => editor.Renaming = true)"/>
+                    }
+
+                    <MudSpacer/>
+
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                   title="Remove this set" OnClick="@(() => _sets.Remove(editor))"/>
+                </div>
+
+                @if (editor.Mode == MatchMode.Advanced)
+                {
+                    @* A hand-written parentId or namePattern: shown as is, never flattened. *@
+                    <div class="d-flex align-center gap-2 mt-3 flex-wrap">
+                        <MudText Typo="Typo.caption" Style="color: #8B8F98;">CLAIMS</MudText>
+                        <MudText Typo="Typo.body2" Class="rs-mono">@editor.MatchSummary()</MudText>
+                    </div>
+                    <MudText Typo="Typo.caption" Style="color: #8B8F98;" Class="mt-1 d-block">
+                        Kept exactly as written. Edit the audio here and the match is left alone.
+                    </MudText>
+                }
+                else
+                {
+
+                <div class="d-flex align-center gap-2 mt-3 flex-wrap">
+                    <MudText Typo="Typo.caption" Style="color: #8B8F98;">CLAIMS</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                             Variant="@(editor.Mode == MatchMode.Weapons ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => Edit(editor, e => e.SetMode(MatchMode.Weapons)))">these weapons</MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                             Variant="@(editor.Mode == MatchMode.Class ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => Edit(editor, e => e.SetMode(MatchMode.Class)))">a whole class</MudChip>
+                </div>
+
+                @if (editor.Mode == MatchMode.Class)
+                {
+                    <div class="d-flex gap-3 mt-3 flex-wrap">
+                        <MudSelect T="string" Value="@editor.Draft.Rule.WeapClass" Label="Class"
+                                   ValueChanged="@((string v) => Edit(editor, e => e.SetClass(v)))"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 220px;">
+                            @foreach (var c in _classes)
+                            {
+                                <MudSelectItem T="string" Value="@c">@Labels.Class(c)</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudSelect T="string" Value="@(editor.Draft.Rule.Caliber ?? "")" Label="Calibre (optional)"
+                                   ValueChanged="@((string v) => Edit(editor, e => e.SetCaliber(v)))"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 240px;">
+                            <MudSelectItem T="string" Value="@("")">any</MudSelectItem>
+                            @foreach (var c in editor.Calibres(editor.Draft.Rule.WeapClass))
+                            {
+                                <MudSelectItem T="string" Value="@c">@Labels.Calibre(c)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+                }
+                else
+                {
+                    <div class="mt-3">
+                        <WeaponPicker Weapons="_weapons" Selected="editor.Weapons"
+                                      OnChanged="@(() => Edit(editor, e => e.WeaponsChanged()))"/>
+                    </div>
+                }
+
+                <MudDivider Class="my-3"/>
+
+                @* What the set claims, before anything is written. *@
+                @if (claims.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Style="color: #F0575B;">
+                        This set claims no weapons, so nothing would play it.
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">
+                        <b>@claims.Count</b> weapon@(claims.Count == 1 ? "" : "s"):
+                        <span style="color:#B4B7BF;">@Names(claims)</span>
+                    </MudText>
+                }
+
+                }
+
+                <MudDivider Class="my-3"/>
+
+                @* Where the audio actually goes in. Everything below is about one set's folder. *@
+                <div class="d-flex align-center gap-3 flex-wrap mb-3">
+                    <MudText Typo="Typo.caption" Style="color: #8B8F98;">AUDIO</MudText>
+
+                    @if (editor.Clips == 0)
+                    {
+                        <MudText Typo="Typo.body2" Style="color:#F0575B;">
+                            nothing yet, so these weapons stay vanilla
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">
+                            <b>@editor.Clips</b> clip@(editor.Clips == 1 ? "" : "s")
+                            <span style="color:#B4B7BF;">in @string.Join(", ", editor.SlotsInUse)</span>
+                        </MudText>
+
+                        @if (!editor.HasBody)
+                        {
+                            <MudText Typo="Typo.body2" Style="color:#F0575B;">
+                                but nothing in body/, so the gunshot itself is unchanged
+                            </MudText>
+                        }
+                    }
+                </div>
+
+                <div class="d-flex gap-3 flex-wrap align-start mb-3">
+                    <MudTextField T="string" Value="@editor.ScanPath" Immediate="true"
+                                  ValueChanged="@((string v) => editor.ScanPath = v)"
+                                  Label="Folder of rips" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Style="min-width: 340px; flex: 1;"
+                                  HelperText="Anything under it, sorted into slots by filename."/>
+
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Class="mt-1"
+                               Disabled="@string.IsNullOrWhiteSpace(editor.ScanPath)"
+                               StartIcon="@Icons.Material.Filled.FolderOpen"
+                               OnClick="@(() => ScanFolder(editor))">Scan</MudButton>
+
+                    @* Blazor's own InputFile: MudBlazor keeps renaming its activator fragment. *@
+                    <label class="rs-upload mt-1">
+                        <InputFile multiple accept="@AcceptedExtensions"
+                                   OnChange="@(e => Upload(editor, e.GetMultipleFiles(200)))"/>
+                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Small" Class="mr-2"/>
+                        Or choose files
+                    </label>
+                </div>
+
+                @if (editor.Audio.Count > 0)
+                {
+                    <div style="border: 1px solid #2C2C35; border-radius: 6px; max-height: 320px; overflow-y: auto;">
+                        @foreach (var clip in editor.Audio)
+                        {
+                            var file = clip;
+
+                            <div class="d-flex align-center gap-2 px-2 py-1"
+                                 style="@(file.Ok ? "" : "background: #191417;")">
+
+                                @if (file.Ok)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small"
+                                                   title="Hear it" OnClick="@(() => Play(file))"/>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.ErrorOutline" Size="Size.Small"
+                                             Style="color:#F0575B; margin: 6px;"/>
+                                }
+
+                                <div style="flex: 1; min-width: 0;">
+                                    <MudText Typo="Typo.body2" Class="rs-mono" Style="overflow-wrap: anywhere;">
+                                        @file.OriginalName
+                                    </MudText>
+
+                                    @if (file.Ok)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="color: #8B8F98;">
+                                            @file.Seconds.ToString("0.00")s
+                                            &middot; @(file.Channels == 1 ? "mono" : file.Channels + " channels")
+                                            &middot; @(file.SampleRate / 1000)kHz
+                                            @if (file.Converted)
+                                            {
+                                                <span> &middot; converted to mono 48kHz</span>
+                                            }
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Style="color: #F0575B;">@file.Problem</MudText>
+
+                                        @if (file.Fix is not null)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="rs-mono d-block" Style="color: #8B8F98;">
+                                                @file.Fix
+                                            </MudText>
+                                        }
+                                    }
+
+                                    @if (file.Ok && file.Doubt is not null)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="color: #E0B072;">@file.Doubt</MudText>
+                                    }
+                                </div>
+
+                                @if (file.Ok)
+                                {
+                                    @* A plain select: there is one per clip and a pack can have hundreds. *@
+                                    <select class="rs-slot" value="@file.Slot"
+                                            @onchange="@(e => Edit(editor, x => x.Reslot(file, e.Value?.ToString() ?? "body")))">
+                                        @foreach (var slot in SlotOptions(editor, file))
+                                        {
+                                            <option value="@slot" selected="@(slot == file.Slot)">@slot</option>
+                                        }
+                                    </select>
+                                }
+
+                                <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small"
+                                               OnClick="@(() => Edit(editor, e => e.Remove(file)))"/>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!Converter.HasFfmpeg)
+                {
+                    <MudText Typo="Typo.caption" Style="color: #8B8F98;" Class="mt-2 d-block">
+                        WAV only on this machine. Install ffmpeg
+                        (<span class="rs-mono">winget install Gyan.FFmpeg</span>) and restart the
+                        server to drop mp3, ogg and flac straight in.
+                    </MudText>
+                }
+
+                @if (stolen.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mt-3">
+                        @stolen.Count of them already play
+                        <b>@string.Join(", ", stolen.Select(s => s.Value).Distinct())</b>,
+                        which outranks this set. Yours would not be heard on them.
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning"
+                                   Class="ml-2" OnClick="WinEverything">Make my pack win</MudButton>
+                    </MudAlert>
+                }
+            </MudPaper>
+        }
+    </MudPaper>
+
+    @* ------------------------------------------------------------------ 3. build *@
+
+    <MudPaper Class="pa-6 mb-4 rs-in" Elevation="0" Style="--d:.16s; border: 1px solid #2C2C35;">
+        <div class="d-flex align-center flex-wrap gap-3">
+            <MudAvatar Size="Size.Small" Color="Color.Primary" Class="mr-1">3</MudAvatar>
+            <div style="min-width: 240px;">
+                <MudText Typo="Typo.h6">Write it</MudText>
+                <MudText Typo="Typo.body2" Style="color: #B4B7BF;">@Summary()</MudText>
+            </div>
+            <MudSpacer/>
+
+            @* Never refuses: names what is missing and asks once before writing a pack with no audio. *@
+            <MudButton Variant="Variant.Filled" Color="@(_confirmSilent ? Color.Warning : Color.Primary)"
+                       Disabled="@(!CanBuild)" StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="WritePack">@BuildLabel</MudButton>
+        </div>
+
+        @if (Blocker is { } blocker)
+        {
+            <MudText Typo="Typo.body2" Style="color: #B4B7BF;" Class="mt-3">@blocker</MudText>
+        }
+
+        @if (Silent.Count > 0 && CanBuild)
+        {
+            <MudAlert Severity="@(_confirmSilent ? Severity.Warning : Severity.Info)" Dense="true"
+                      Variant="Variant.Outlined" Class="mt-3">
+                @if (_confirmSilent)
+                {
+                    <span>
+                        <b>@Join(Silent)</b> @(Silent.Count == 1 ? "has" : "have") no sound in
+                        @(Silent.Count == 1 ? "it" : "them"), so
+                        <b>@Silent.Sum(x => x.Claims().Count) weapons</b> would still play Tarkov's
+                        own audio. Press again to build it anyway, or drop some wavs in first.
+                    </span>
+                }
+                else
+                {
+                    <span>
+                        <b>@Join(Silent)</b> @(Silent.Count == 1 ? "has" : "have") no sound in
+                        @(Silent.Count == 1 ? "it" : "them") yet.
+                    </span>
+                }
+            </MudAlert>
+        }
+
+        @if (_result is { Written: false } failed && failed.Refusals.Count > 0)
+        {
+            <MudDivider Class="my-4"/>
+            <MudText Typo="Typo.body2" Class="mb-2" Style="color:#F0575B;">Nothing was written:</MudText>
+
+            @foreach (var problem in failed.Refusals)
+            {
+                <div class="mb-2" style="padding-left: 10px; border-left: 2px solid #F0575B;">
+                    <MudText Typo="Typo.body2">
+                        @if (problem.Entry is not null)
+                        {
+                            <span style="color:#B4B7BF;">@problem.Entry</span>
+                        }
+                        <span> @problem.Message</span>
+                    </MudText>
+                    @if (problem.Fix is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="rs-mono" Style="color: #8B8F98;">@problem.Fix</MudText>
+                    }
+                </div>
+            }
+        }
+
+        @if (_result is { Written: true } built)
+        {
+            <MudDivider Class="my-4"/>
+
+            <MudAlert Severity="Severity.Success" Dense="true" Variant="Variant.Outlined" Class="mb-4">
+                Written to <span class="rs-mono">@built.Directory</span>
+            </MudAlert>
+
+            @foreach (var set in _sets)
+            {
+                <div class="mb-2">
+                    <MudText Typo="Typo.body2">@Label(set)</MudText>
+                    @if (set.Draft.Files.Count > 0)
+                    {
+                        <MudText Typo="Typo.caption" Style="color: #8B8F98;">
+                            @set.Draft.Files.Count clip(s) in @string.Join(", ", set.SlotsInUse)
+                        </MudText>
+                    }
+                    else
+                    {
+                        @* Only a set built without audio needs telling where its files go. *@
+                        <MudText Typo="Typo.caption" Style="color: #E0B072;">
+                            no audio yet, so these weapons stay vanilla. Put mono WAVs in
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="rs-mono d-block" Style="color: #8B8F98;">
+                            @System.IO.Path.Join(built.Directory, "sounds", set.Draft.SoundSet, "body")
+                        </MudText>
+                    }
+                </div>
+            }
+
+            <MudDivider Class="my-4"/>
+
+            <div class="d-flex align-center gap-3 flex-wrap">
+                <div style="min-width: 240px;">
+                    <MudText Typo="Typo.body1">Give it to somebody else</MudText>
+                    <MudText Typo="Typo.body2" Style="color: #B4B7BF;">
+                        A zip with the install path already inside, so they just extract it into
+                        their SPT folder. They do not need the server mod.
+                    </MudText>
+                </div>
+                <MudSpacer/>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Archive" OnClick="Export">Export a zip</MudButton>
+            </div>
+
+            @if (_exported is not null)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Variant="Variant.Outlined" Class="mt-3">
+                    <span class="rs-mono">@_exported</span>
+                </MudAlert>
+            }
+
+            @if (_exportProblem is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mt-3">
+                    @_exportProblem
+                </MudAlert>
+            }
+
+            <MudText Typo="Typo.caption" Style="color: #8B8F98;" Class="mt-4 d-block">
+                The pack shows up on the overview page once it has audio in it. Restart the game
+                to hear it.
+            </MudText>
+        }
+    </MudPaper>
+
+    @* One player for the page. Bytes are inlined since Blazor Server has no file endpoint. *@
+    @if (_playing is not null)
+    {
+        <div class="rs-savebar" style="border-top-color:#2C2C35;">
+            <MudContainer MaxWidth="MaxWidth.Large" Class="py-3 d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.GraphicEq" Style="color:#5B9CFF;"/>
+                <MudText Typo="Typo.body2" Class="rs-mono">@_playing</MudText>
+                <MudSpacer/>
+                <audio controls autoplay src="@_playingSource" style="height: 34px;"></audio>
+                <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small"
+                               OnClick="@(() => { _playing = null; _playingSource = null; })"/>
+            </MudContainer>
+        </div>
+    }
+
+</MudContainer>
+
+@code {
+    private List<WeaponRow> _weapons = new();
+    private List<PackRow> _packs = new();
+    private List<string> _classes = new();
+
+    private string _id = "";
+    private string _name = "";
+    private string _author = "";
+    private int _priority;
+    private bool _autoLevel = true;
+    private bool _advanced;
+    private bool _customPriority;
+    private bool _idEdited;
+    private bool _confirmSilent;
+    private bool _built;
+
+    private readonly List<SetEditor> _sets = new();
+    private BuildResult? _result;
+
+    // Uploads ride the SignalR circuit, so this is a hard ceiling. Bigger files go through the scan box.
+    private const long MaxUploadBytes = 32L * 1024 * 1024;
+
+    private string? _playing;
+    private string? _playingSource;
+
+    private string? _opened;
+    private string? _exported;
+    private string? _exportProblem;
+
+    private static readonly string AcceptedExtensions =
+        string.Join(",", AudioConverter.KnownAudioExtensions);
+
+    protected override void OnInitialized()
+    {
+        _weapons = Resound.GetWeapons();
+        _packs = Resound.GetPacks();
+        _classes = _weapons.Select(w => w.WeapClass).Distinct().OrderBy(c => c).ToList();
+    }
+
+    private string Slug => PackBuilderService.Slug(_id);
+
+    private bool IdTaken =>
+        !string.IsNullOrEmpty(Slug) &&
+        _packs.Any(p => p.Id.Equals(Slug, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The folder follows the pack name until changed by hand.</summary>
+    private void OnNameChanged()
+    {
+        if (!_idEdited)
+            _id = PackBuilderService.Slug(_name);
+    }
+
+    private void OnIdEdited()
+    {
+        _idEdited = true;
+    }
+
+    // ------------------------------------------------------------------ readiness
+
+    /// <summary>Sets that would be written with no audio at all, so the guns stay vanilla.</summary>
+    private List<SetEditor> Silent => _sets.Where(s => s.Draft.Rule.Enabled && s.Clips == 0).ToList();
+
+    private bool CanBuild => !string.IsNullOrEmpty(Slug) && _sets.Count > 0 && _sets.All(s => s.Claims().Count > 0);
+
+    private string BuildLabel => _confirmSilent ? "Build it anyway" : "Build the pack";
+
+    /// <summary>The one thing standing in the way, in the order someone would hit them.</summary>
+    private string? Blocker
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Slug))
+                return "Give the pack a name first.";
+
+            if (_sets.Count == 0)
+                return "Add a set, and say which guns it is for.";
+
+            var claimless = _sets.Where(s => s.Claims().Count == 0).ToList();
+
+            return claimless.Count == 0
+                ? null
+                : $"{Join(claimless)} {(claimless.Count == 1 ? "claims" : "claim")} no weapons, so " +
+                  $"{(claimless.Count == 1 ? "it would" : "they would")} never be heard. Pick some guns for " +
+                  $"{(claimless.Count == 1 ? "it" : "them")}.";
+        }
+    }
+
+    /// <summary>What is about to be written, in one line, before it is.</summary>
+    private string Summary()
+    {
+        if (_sets.Count == 0)
+            return "Writes the pack, audio included, into your plugins folder.";
+
+        var weapons = _sets.SelectMany(x => x.Claims()).Select(w => w.Id).Distinct().Count();
+        var clips = _sets.Sum(x => x.Clips);
+
+        return $"{_sets.Count} set{(_sets.Count == 1 ? "" : "s")}, " +
+               $"{weapons} weapon{(weapons == 1 ? "" : "s")}, " +
+               $"{clips} clip{(clips == 1 ? "" : "s")}.";
+    }
+
+    private static string Join(List<SetEditor> sets)
+    {
+        var names = sets.Select(x => x.Draft.Rule.Name).ToList();
+
+        return names.Count switch
+        {
+            1 => names[0],
+            2 => $"{names[0]} and {names[1]}",
+            _ => $"{names[0]} and {names.Count - 1} others"
+        };
+    }
+
+    private void OnPriorityChanged(int value)
+    {
+        _customPriority = value == int.MinValue;
+        _priority = _customPriority ? 0 : value;
+    }
+
+    // ------------------------------------------------------------------ sets
+
+    private void AddSet()
+    {
+        _sets.Add(new SetEditor(_weapons, _classes.FirstOrDefault()));
+        _result = null;
+        _confirmSilent = false;
+    }
+
+    private void Edit(SetEditor editor, Action<SetEditor> change)
+    {
+        change(editor);
+        _result = null;
+        _confirmSilent = false;
+    }
+
+    // ------------------------------------------------------------------ audio
+
+    /// <summary>The bulk path: a dumper's whole tree comes in at once.</summary>
+    private void ScanFolder(SetEditor editor)
+    {
+        if (string.IsNullOrWhiteSpace(editor.ScanPath))
+            return;
+
+        Edit(editor, e => e.Add(Staging.Scan(e.ScanPath!.Trim())));
+    }
+
+    private async Task Upload(SetEditor editor, IReadOnlyList<IBrowserFile> files)
+    {
+        var taken = new List<StagedCandidate>();
+
+        foreach (var file in files)
+        {
+            try
+            {
+                await using var stream = file.OpenReadStream(MaxUploadBytes);
+                taken.Add(await Staging.TakeAsync(stream, file.Name));
+            }
+            catch (Exception e)
+            {
+                // Almost always the size cap, and a silent failed upload is the worst outcome.
+                taken.Add(new StagedCandidate
+                {
+                    OriginalName = file.Name,
+                    Problem = $"could not be read: {e.Message}",
+                    Fix = $"Files are capped at {MaxUploadBytes / (1024 * 1024)}MB each here. " +
+                          "Point the scan box at the folder instead, which has no limit."
+                });
+            }
+        }
+
+        Edit(editor, e => e.Add(taken));
+    }
+
+    /// <summary>The six slots, the common events, and any other event this set already uses.</summary>
+    private static IEnumerable<string> SlotOptions(SetEditor editor, StagedCandidate file)
+    {
+        var slots = new List<string>(SlotClassifier.Slots);
+        slots.AddRange(SlotClassifier.CommonEvents.Select(e => "events/" + e));
+
+        foreach (var used in editor.SlotsInUse.Concat([file.Slot]))
+        {
+            if (!slots.Contains(used, StringComparer.OrdinalIgnoreCase))
+                slots.Add(used);
+        }
+
+        return slots;
+    }
+
+    private void Play(StagedCandidate file)
+    {
+        if (file.File is null)
+            return;
+
+        var bytes = Staging.Read(file.File);
+
+        if (bytes is null)
+        {
+            _playing = file.OriginalName;
+            _playingSource = null;
+            return;
+        }
+
+        _playing = file.OriginalName;
+        _playingSource = "data:audio/wav;base64," + Convert.ToBase64String(bytes);
+    }
+
+    private string Label(SetEditor editor)
+    {
+        return string.IsNullOrWhiteSpace(editor.Draft.Rule.Name) ? editor.Draft.SoundSet : editor.Draft.Rule.Name;
+    }
+
+    // ------------------------------------------------------------------ preview
+
+    private static string Names(List<WeaponRow> claims)
+    {
+        var shown = string.Join(", ", claims.Take(6).Select(w => w.ShortName));
+        return claims.Count > 6 ? $"{shown} and {claims.Count - 6} more" : shown;
+    }
+
+    /// <summary>Claimed weapons an installed pack would keep, named so the warning is actionable.</summary>
+    private List<KeyValuePair<string, string>> Contested(SetEditor editor, List<WeaponRow> claims)
+    {
+        var contested = new List<KeyValuePair<string, string>>();
+        var specificity = editor.Draft.Rule.Specificity;
+
+        foreach (var weapon in claims)
+        {
+            if (Resound.Winner(weapon, _packs) is not { } held)
+                continue;
+
+            // Every pack outranks the shipped sounds, so displacing them is not worth a warning.
+            if (held.Pack.Id == ResoundService.BuiltinId)
+                continue;
+
+            if (!ResoundService.Outranks(_priority, specificity, Slug, held.Pack, held.Rule))
+                contested.Add(new KeyValuePair<string, string>(weapon.ShortName, held.Pack.Display));
+        }
+
+        return contested;
+    }
+
+    private void WinEverything()
+    {
+        _advanced = true;
+        _customPriority = false;
+        _priority = _packs.Where(p => p.Id != ResoundService.BuiltinId)
+                          .Select(p => p.Priority)
+                          .DefaultIfEmpty(0)
+                          .Max() + 1;
+    }
+
+    // ------------------------------------------------------------------ opening
+
+    /// <summary>Installed packs, minus the shipped sounds, which have no manifest to edit.</summary>
+    private List<PackRow> Editable =>
+        _packs.Where(p => p.Id != ResoundService.BuiltinId).ToList();
+
+    private void OpenPack(PackRow pack)
+    {
+        Dispose();
+        _sets.Clear();
+
+        _id = pack.Id;
+        _name = pack.Name;
+        _author = pack.Author;
+        _priority = pack.Priority;
+        _autoLevel = pack.AutoLevel;
+        _customPriority = _priority is not (0 or -50 or 10);
+        _advanced = _customPriority || _priority != 0 || !_autoLevel;
+
+        var draft = Builder.Open(pack);
+
+        foreach (var set in draft.Sets)
+        {
+            var editor = new SetEditor(_weapons, set);
+
+            // Its own files, in place. Anything that will not load shows as a problem.
+            editor.Add(Builder.ExistingAudio(pack.SoundsRoot, set.SoundSet)
+                .Select(a => Staging.Take(a.Path, a.Slot)));
+
+            _sets.Add(editor);
+        }
+
+        // Building now saves over what was opened, which is the point of having opened it.
+        _built = true;
+        _opened = pack.Display;
+        _result = null;
+        _exported = null;
+        _exportProblem = null;
+    }
+
+    // ------------------------------------------------------------------ export
+
+    private void Export()
+    {
+        _exported = null;
+        _exportProblem = null;
+
+        if (_result?.Directory is not { } directory)
+            return;
+
+        try
+        {
+            _exported = Builder.Export(directory);
+        }
+        catch (Exception e)
+        {
+            _exportProblem = $"The zip could not be written: {e.Message}";
+        }
+    }
+
+    // ------------------------------------------------------------------ build
+
+    private void WritePack()
+    {
+        // Asked once, not refused: a folders-only build is legitimate.
+        if (Silent.Count > 0 && !_confirmSilent)
+        {
+            _confirmSilent = true;
+            return;
+        }
+
+        _confirmSilent = false;
+
+        var draft = new PackDraft
+        {
+            Id = _id,
+            Name = _name,
+            Author = _author,
+            Priority = _priority,
+            AutoLevel = _autoLevel,
+            Sets = _sets.Select(s => s.Draft).ToList()
+        };
+
+        // Usually the same pack built again, and the builder never deletes anything.
+        _result = Builder.Build(draft, overwrite: IdTaken || _built);
+
+        _exported = null;
+        _exportProblem = null;
+
+        if (_result.Written)
+        {
+            _built = true;
+
+            // Re-read from disk so the new pack shows up without a server restart.
+            _packs = Resound.GetPacks();
+        }
+    }
+
+    /// <summary>Deletes this page's converted copies. Files used in place are never touched.</summary>
+    public void Dispose()
+    {
+        foreach (var set in _sets)
+        foreach (var clip in set.Accepted)
+            Staging.Discard(clip.File);
+    }
+}

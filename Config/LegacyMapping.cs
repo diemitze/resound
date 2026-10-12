@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 
 namespace Resound.Config
@@ -8,9 +8,7 @@ namespace Resound.Config
     {
         public const string PackId = "builtin";
 
-        // The shipped sounds are the floor, not the ceiling. Anything the user chose to install
-        // outranks them, so adding a weapon here later can never take it back off someone's pack.
-        // A pack that wants to sit below the built-ins can still say so with a lower priority.
+        // The floor: anything installed outranks the shipped sounds, so a weapon added here later never steals one back.
         public const int Priority = -100;
 
         public static Pack Load(string pluginDir)
@@ -31,6 +29,7 @@ namespace Resound.Config
                 Name = "Resound built-in",
                 Directory = root,
                 Priority = Priority,
+                AutoLevel = false,
                 Entries = new List<PackEntry>()
             };
 
@@ -41,13 +40,23 @@ namespace Resound.Config
                     Name = w.Name,
                     SoundSet = w.SoundSet,
                     Enabled = w.Enabled,
-                    Match = new WeaponMatch { TemplateId = w.TemplateId },
+                    Match = new WeaponMatch
+                    {
+                        // An empty string in the json reads as "unset" for matching purposes.
+                        TemplateId = string.IsNullOrEmpty(w.TemplateId) ? null : w.TemplateId,
+                        TemplateIds = w.TemplateIds,
+                        ParentId = w.ParentId,
+                        WeapClass = w.WeapClass,
+                        Caliber = w.Caliber,
+                        NamePattern = w.NamePattern
+                    },
                     BodyVolume = w.BodyVolume,
                     TailVolume = w.TailVolume,
                     BodySilencedVolume = w.BodySilencedVolume,
                     TailSilencedVolume = w.TailSilencedVolume,
                     EventVolume = w.EventVolume,
-                    DecayBeats = w.DecayBeats
+                    DecayBeats = w.DecayBeats,
+                    AutoLevel = w.AutoLevel
                 });
             }
 

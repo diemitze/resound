@@ -1,35 +1,29 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ResoundServer</RootNamespace>
     <AssemblyName>Resound.Server</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Library, not an app: the SPT server hosts this, it does not run on its own. -->
     <OutputType>Library</OutputType>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <OutputPath>bin\$(Configuration)\$(ProjectName)\$(AssemblyName)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SPTarkov.Common" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.DI" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.Reflection" Version="4.0.13" />
-    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.13" />
-    <!-- Brings the Blazor host and MudBlazor that the config pages render into. -->
-    <PackageReference Include="SPTarkov.Server.Web" Version="4.0.13" />
+    <PackageReference Include="SPTarkov.Common" Version="4.1.0" />
+    <PackageReference Include="SPTarkov.DI" Version="4.1.0" />
+    <PackageReference Include="SPTarkov.Reflection" Version="4.1.0" />
+    <PackageReference Include="SPTarkov.Server.Core" Version="4.1.0" />
+    <PackageReference Include="SPTarkov.Server.Web" Version="4.1.0" />
   </ItemGroup>
 
-  <!-- Auto-deploy to a local SPT install. Skipped when that path does not exist, so cloning
-       and building this repo works without having SPT at the same location. -->
-  <!-- The running SPT server holds this DLL open, so a deploy while it is up cannot work.
-       Warn instead of failing: the build itself succeeded and the only fix is to close the
-       server, which is a decision for whoever is playing. -->
-  <Target Name="DeployToSpt" AfterTargets="Build" Condition="Exists('D:\SPT dev\SPT\user\mods')">
-    <MakeDir Directories="D:\SPT dev\SPT\user\mods\Resound.Server" />
-    <Exec Command="xcopy /E /I /Y &quot;$(ProjectDir)$(OutputPath)*&quot; &quot;D:\SPT dev\SPT\user\mods\Resound.Server&quot;"
+  <!-- Deploys to the local SPT install. Warns rather than fails while the running server holds the DLL. -->
+  <Target Name="DeployToSpt" AfterTargets="Build" Condition="Exists('D:\SPT 4.1 dev\SPT_Runtime\user\mods')">
+    <MakeDir Directories="D:\SPT 4.1 dev\SPT_Runtime\user\mods\Resound.Server" />
+    <Exec Command="xcopy /E /I /Y &quot;$(ProjectDir)$(OutputPath)*&quot; &quot;D:\SPT 4.1 dev\SPT_Runtime\user\mods\Resound.Server&quot;"
           ContinueOnError="WarnAndContinue" />
     <Warning Text="Could not deploy to SPT: close the SPT server and rebuild." Condition="'$(MSBuildLastTaskResult)' == 'false'" />
   </Target>

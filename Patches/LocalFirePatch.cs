@@ -8,13 +8,12 @@ using SPT.Reflection.Patching;
 
 namespace Resound.Patches
 {
-    // The one place the sound player and the Weapon are both in scope.
-    // Prefix, so banks are swapped before FireBullet reads them.
+    // Prefix: the banks must be swapped before FireBullet reads them.
     internal class LocalFirePatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
         {
-            return AccessTools.Method(typeof(Player.FirearmController), "method_59");
+            return AccessTools.Method(typeof(Player.FirearmController), nameof(Player.FirearmController.PlayFireBulletSound));
         }
 
         [PatchPrefix]

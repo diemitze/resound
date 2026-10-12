@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Resound.csproj" />
+  <Project Path="Server/Resound.Server.csproj" />
+  <Project Path="Tests/Resound.Server.Tests.csproj" />
+</Solution>

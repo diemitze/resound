@@ -4,6 +4,7 @@ using Resound.Config;
 using EFT.InventoryLogic;
 using HarmonyLib;
 using SPT.Reflection.Patching;
+using EFT.NextObservedPlayer;
 
 namespace Resound.Patches
 {
@@ -12,11 +13,11 @@ namespace Resound.Patches
     {
         protected override MethodBase GetTargetMethod()
         {
-            return AccessTools.Method(typeof(HandsControllerClass), "method_38");
+            return AccessTools.Method(typeof(ObservedPlayerHandsController), nameof(ObservedPlayerHandsController.FireShotSound));
         }
 
         [PatchPrefix]
-        private static void Prefix(HandsControllerClass __instance, BaseSoundPlayer baseSoundPlayer)
+        private static void Prefix(ObservedPlayerHandsController __instance, BaseSoundPlayer baseSoundPlayer)
         {
             if (!Plugin.Enabled.Value)
                 return;

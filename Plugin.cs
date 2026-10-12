@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -16,11 +16,13 @@ namespace Resound
     {
         public const string GUID = "com.20fpsguy.resound";
         public const string NAME = "Resound";
-        public const string VERSION = "1.1.0";
+        public const string VERSION = "1.2.0";
 
         public static ManualLogSource Log;
 
         public static ConfigEntry<bool> Enabled;
+        public static ConfigEntry<bool> AutoLevel;
+        public static ConfigEntry<bool> WriteReport;
         public static ConfigEntry<bool> Debug;
         public static ConfigEntry<bool> LogSoundEvents;
         public static ConfigEntry<bool> LogWeaponIds;
@@ -40,6 +42,23 @@ namespace Resound
                 true,
                 "Swap mapped weapons over to their replacement sounds. Turn off to hear vanilla " +
                 "again without uninstalling; takes effect on the next shot, no restart needed.");
+
+            AutoLevel = Config.Bind(
+                "1. General",
+                "Match pack loudness to vanilla",
+                true,
+                "Measure each replacement clip against the Tarkov sound it stands in for and " +
+                "play it at the same level. Source games master gunshots far louder than BSG " +
+                "does, which is why an untuned pack tends to be deafening. Packs that say " +
+                "their levels are already mixed are left alone either way.");
+
+            WriteReport = Config.Bind(
+                "2. Misc",
+                "Write pack report",
+                true,
+                "Write BepInEx/plugins/Resound/pack-report.txt at startup, listing every pack, " +
+                "every sound set, and anything that will stop a weapon being replaced. Read " +
+                "this first when a pack is silent.");
 
             Debug = Config.Bind(
                 "2. Misc",
@@ -78,6 +97,7 @@ namespace Resound
         {
             PackRegistry.Clear();
             ClipLibrary.Forget();
+            Loudness.Forget();
 
             string resoundRoot = Path.Combine(pluginDir, "Resound");
 
@@ -123,8 +143,10 @@ namespace Resound
             Log.LogInfo(NAME + " " + VERSION + " loaded " + PackRegistry.Count + " pack(s): " +
                         entries + " entry(s), " + clips + " clip(s).");
 
-            // Ask the server last, once local packs are known: its answer names pack ids that
-            // have to be matched against what is installed here.
+            if (WriteReport == null || WriteReport.Value)
+                PackReport.Write(resoundRoot);
+
+            // After local discovery: the server's answer names pack ids we must find here.
             Dictionary<string, ResolvedSound> table = ServerSync.Fetch();
             if (table != null)
                 PackRegistry.UseServerTable(table);
@@ -132,14 +154,12 @@ namespace Resound
             BindPackSelector();
         }
 
-        // Built from what is actually installed, so the dropdown lists the user's packs by name
-        // rather than making them work out priority numbers.
+        // Lists installed packs by name so nobody has to reason about priority numbers.
         private static void BindPackSelector()
         {
             List<string> choices = new List<string> { PackRegistry.Auto };
 
-            // The server's table already has the per-weapon pins baked in, so a local override
-            // here would silently disagree with the config page.
+            // The server table already includes the per-weapon pins; a local pick would disagree with it.
             if (!PackRegistry.ServerDriven)
             {
                 foreach (Pack pack in PackRegistry.All)

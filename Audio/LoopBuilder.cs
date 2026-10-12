@@ -1,16 +1,36 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Resound.Audio
 {
-    // An automatic weapon's Body bank is a 16-shot firing loop, not a single shot
-    // (BeatLn is _firingLoopLength / 16). Rebuilds one from a single-shot sample,
-    // taking the length from the bank being replaced so the rate matches the weapon.
+    // Builds the 16-shot firing loop an automatic Body bank expects, at the replaced bank's length.
     internal static class LoopBuilder
     {
         public const int Beats = 16;
 
         // Longer overlap turns a 1.2s sample into mush at a 0.09s beat.
         public const float DefaultDecayBeats = 4f;
+
+        // Negative rather than 0, so an explicit 0 in a manifest is not read as auto.
+        public const float Auto = -1f;
+
+        private const float MinAutoBeats = 2f;
+        private const float MaxAutoBeats = 8f;
+
+        // Only the truncated end needs a ramp, and only enough of one to kill the click.
+        private const float FadeFraction = 0.25f;
+
+        /// <summary>Beats to keep when the manifest does not say: longer for long samples, capped at both ends.</summary>
+        public static float Suggest(AudioClip source, float loopLength)
+        {
+            if (source == null || loopLength <= 0f)
+                return DefaultDecayBeats;
+
+            float beat = loopLength / Beats;
+            if (beat <= 0f)
+                return DefaultDecayBeats;
+
+            return Mathf.Clamp(source.length / beat, MinAutoBeats, MaxAutoBeats);
+        }
 
         public static AudioClip Build(AudioClip source, float loopLength, float decayBeats)
         {
@@ -34,11 +54,16 @@ namespace Resound.Audio
                 return source;
 
             if (decayBeats <= 0f)
-                decayBeats = DefaultDecayBeats;
+                decayBeats = Suggest(source, loopLength);
 
             int decayFrames = Mathf.Min(srcFrames, Mathf.RoundToInt(decayBeats * beatFrames));
             if (decayFrames <= 0)
                 return source;
+
+            // A sample that fits its window is not cut, so it keeps its own decay.
+            bool truncated = decayFrames < srcFrames;
+            int fadeFrames = truncated ? Mathf.Max(1, Mathf.RoundToInt(decayFrames * FadeFraction)) : 0;
+            int fadeStart = decayFrames - fadeFrames;
 
             float[] dst = new float[totalFrames * channels];
 
@@ -48,9 +73,9 @@ namespace Resound.Audio
 
                 for (int f = 0; f < decayFrames; f++)
                 {
-                    float gain = 1f - (float)f / decayFrames;
+                    float gain = f < fadeStart ? 1f : (float)(decayFrames - f) / fadeFrames;
 
-                    // Wrap so the last shot bleeds into the start when the loop repeats.
+                    // Wrap: the clip loops while the trigger is held, so without this every repeat has a gap.
                     int dstFrame = (start + f) % totalFrames;
 
                     for (int c = 0; c < channels; c++)
@@ -80,9 +105,11 @@ namespace Resound.Audio
             Object.DontDestroyOnLoad(loop);
 
             Plugin.Dbg("Built 16-beat loop from " + source.name + ": " + loopLength + "s @ " +
-                       (60f / (loopLength / Beats)).ToString("F0") + " RPM, decay " + decayBeats +
-                       " beat(s) = " + (decayFrames / (float)freq).ToString("F3") + "s of " +
-                       (srcFrames / (float)freq).ToString("F3") + "s sample");
+                       (60f / (loopLength / Beats)).ToString("F0") + " RPM, decay " +
+                       decayBeats.ToString("F1") + " beat(s) = " +
+                       (decayFrames / (float)freq).ToString("F3") + "s of " +
+                       (srcFrames / (float)freq).ToString("F3") + "s sample" +
+                       (truncated ? " (cut)" : " (whole)"));
 
             return loop;
         }

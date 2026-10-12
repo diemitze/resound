@@ -17,8 +17,7 @@ namespace Resound.Audio
         // Shared like the vanilla assets are, otherwise every weapon draw leaks a clone.
         private static readonly Dictionary<string, SoundBank> Cache = new Dictionary<string, SoundBank>();
 
-        // For slots a set does not replace. Without this the kept vanilla bank plays at full
-        // BaseVolume beside clips that were turned down, and the volume knob appears to do nothing.
+        // Kept vanilla banks still take the set's volume, or turning it down does nothing.
         public static SoundBank Rescale(SoundBank original, float volumeScale)
         {
             if (original == null || volumeScale == 1.0f)
@@ -44,13 +43,13 @@ namespace Resound.Audio
 
         // buildLoop is only correct for an automatic weapon's Body bank.
         public static SoundBank Clone(SoundBank original, AudioClip[] clips, bool buildLoop, float volumeScale,
-            float decayBeats)
+            float decayBeats, bool autoLevel)
         {
             if (original == null || clips == null || clips.Length == 0)
                 return null;
 
             string key = original.GetInstanceID() + "|" + clips[0].GetInstanceID() + "|" + clips.Length +
-                         "|" + buildLoop + "|" + volumeScale + "|" + decayBeats;
+                         "|" + buildLoop + "|" + volumeScale + "|" + decayBeats + "|" + autoLevel;
             if (Cache.TryGetValue(key, out SoundBank hit) && hit != null)
                 return hit;
 
@@ -66,6 +65,10 @@ namespace Resound.Audio
                     clips = looped;
                 }
             }
+
+            // After looping, so a full-auto gun compares loop with loop.
+            if (autoLevel)
+                volumeScale *= Loudness.MatchScale(original, clips);
 
             SoundBank bank = Object.Instantiate(original);
             Object.DontDestroyOnLoad(bank);
@@ -94,8 +97,7 @@ namespace Resound.Audio
                 }
             }
 
-            // Shuffle() only ever regrows the bag, so a shorter clip array keeps stale
-            // out-of-range indices and throws on the firing path.
+            // Shuffle() never shrinks its bag, so stale indices would throw on a shorter clip array.
             ShuffleField?.SetValue(bank, null);
             ShuffleIndexField?.SetValue(bank, (byte)0);
 

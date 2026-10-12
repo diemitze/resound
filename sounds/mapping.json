@@ -8,6 +8,7 @@
       "soundSet": "ak74n",
       "bodyVolume": 1.0,
       "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -16,11 +17,12 @@
       "soundSet": "m4a1",
       "bodyVolume": 1.0,
       "tailVolume": 0.28,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
-      "name": "FN SCAR-H (Mk 17) 7.62x51 (BO2 SCAR-H)",
-      "templateId": "6183afd850224f204c1da514",
+      "name": "FN SCAR-H 7.62x51 (Mk 17, Mk 17 FDE, X-17) (BO2 SCAR-H)",
+      "namePattern": "fn_mk17|x17_scar",
       "soundSet": "scarh",
       "bodyVolume": 1.0,
       "tailVolume": 0.28,
@@ -29,38 +31,8 @@
       "enabled": true
     },
     {
-      "name": "FN SCAR-H (Mk 17) FDE 7.62x51 (BO2 SCAR-H)",
-      "templateId": "6165ac306ef05c2ce828ef74",
-      "soundSet": "scarh",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.28,
-      "bodySilencedVolume": 0.3,
-      "tailSilencedVolume": 0.3,
-      "enabled": true
-    },
-    {
-      "name": "X Products X-17 SCAR 17 7.62x51 (BO2 SCAR-H)",
-      "templateId": "676176d362e0497044079f4c",
-      "soundSet": "scarh",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.28,
-      "bodySilencedVolume": 0.3,
-      "tailSilencedVolume": 0.3,
-      "enabled": true
-    },
-    {
-      "name": "FN SCAR-L (Mk 16) 5.56x45 (BO2 SCAR-H, wrong caliber)",
-      "templateId": "6184055050224f204c1da540",
-      "soundSet": "scarh",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.28,
-      "bodySilencedVolume": 0.3,
-      "tailSilencedVolume": 0.3,
-      "enabled": false
-    },
-    {
-      "name": "FN SCAR-L (Mk 16) FDE 5.56x45 (BO2 SCAR-H, wrong caliber)",
-      "templateId": "618428466ef05c2ce828f218",
+      "name": "FN SCAR-L 5.56x45 (Mk 16, Mk 16 FDE) (BO2 SCAR-H, wrong caliber, parked)",
+      "namePattern": "fn_mk16",
       "soundSet": "scarh",
       "bodyVolume": 1.0,
       "tailVolume": 0.28,
@@ -106,6 +78,7 @@
       "soundSet": "p90",
       "bodyVolume": 1.0,
       "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -114,6 +87,7 @@
       "soundSet": "vector",
       "bodyVolume": 1.0,
       "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -122,6 +96,7 @@
       "soundSet": "vector",
       "bodyVolume": 1.0,
       "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -130,6 +105,7 @@
       "soundSet": "mp7",
       "bodyVolume": 1.0,
       "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -138,6 +114,7 @@
       "soundSet": "mp7",
       "bodyVolume": 1.0,
       "tailVolume": 0.25,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
 
@@ -147,6 +124,7 @@
       "soundSet": "sks",
       "bodyVolume": 1.0,
       "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -155,6 +133,7 @@
       "soundSet": "sks",
       "bodyVolume": 1.0,
       "tailVolume": 0.23,
+      "bodySilencedVolume": 0.3,
       "enabled": true
     },
     {
@@ -188,44 +167,13 @@
       "soundSet": "m9a3",
       "bodyVolume": 1.0,
       "tailVolume": 0.8,
+      "bodySilencedVolume": 0.5,
       "enabled": true
     },
 
     {
-      "name": "Desert Eagle MK19 .50 AE",
-      "templateId": "668fe5a998b5ad715703ddd6",
-      "soundSet": "deagle",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.27,
-      "enabled": true
-    },
-    {
-      "name": "Desert Eagle L6 .50 AE",
-      "templateId": "669fa39b48fc9f8db6035a0c",
-      "soundSet": "deagle",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.27,
-      "enabled": true
-    },
-    {
-      "name": "Desert Eagle L6 Tiger .50 AE",
-      "templateId": "669fa3d876116c89840b1217",
-      "soundSet": "deagle",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.27,
-      "enabled": true
-    },
-    {
-      "name": "Desert Eagle L5 .50 AE",
-      "templateId": "669fa3f88abd2662d80eee77",
-      "soundSet": "deagle",
-      "bodyVolume": 1.0,
-      "tailVolume": 0.27,
-      "enabled": true
-    },
-    {
-      "name": "Desert Eagle L5 .357",
-      "templateId": "669fa409933e898cce0c2166",
+      "name": "Desert Eagle (all variants: MK19, L5, L6, L6 Tiger, .357)",
+      "namePattern": "desert_eagle",
       "soundSet": "deagle",
       "bodyVolume": 1.0,
       "tailVolume": 0.27,

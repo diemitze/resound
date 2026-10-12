@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Reflection;
 using Resound.Config;
 using EFT;
@@ -15,8 +15,7 @@ namespace Resound.Audio
             public WeaponSoundPlayer Owner;
             public string TemplateId;
             public SoundSet Set;
-            // _firingLoopLength is read off whichever body bank matches this, so a suppressor
-            // going on or coming off has to re-apply even when the weapon has not changed.
+            // Firing loop length follows the live body bank, so a suppressor change has to re-apply.
             public bool Silenced;
             public SoundBank Body, Tail, Doublet, BodySilenced, TailSilenced, DoubletSilenced;
         }
@@ -26,8 +25,7 @@ namespace Resound.Audio
         private static readonly FieldInfo FiringLoopLengthField =
             typeof(WeaponSoundPlayer).GetField("_firingLoopLength", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        // Init() caches this from the body bank at draw time and it gates source release,
-        // so swapping later without recomputing cuts long clips off mid-shot.
+        // Init() caches this at draw time; swapping later without recomputing cuts long clips short.
         private static void RefreshFiringLoopLength(WeaponSoundPlayer player)
         {
             if (FiringLoopLengthField == null)
@@ -109,18 +107,22 @@ namespace Resound.Audio
             float tailVol = profile.TailVolume;
             float bodySilVol = profile.BodySilencedVolume ?? bodyVol;
             float tailSilVol = profile.TailSilencedVolume ?? tailVol;
-            float decay = profile.DecayBeats ?? LoopBuilder.DefaultDecayBeats;
+            float decay = profile.DecayBeats ?? LoopBuilder.Auto;
 
-            player.Body = Apply(state.Body, set.Body, loop, bodyVol, decay) ?? player.Body;
-            player.Tail = Apply(state.Tail, set.Tail, false, tailVol, decay) ?? player.Tail;
-            player.Doublet = Apply(state.Doublet, set.Doublet, false, bodyVol, decay) ?? player.Doublet;
-            player.BodySilenced = Apply(state.BodySilenced, set.BodySilenced, loop, bodySilVol, decay) ?? player.BodySilenced;
-            player.TailSilenced = Apply(state.TailSilenced, set.TailSilenced, false, tailSilVol, decay) ?? player.TailSilenced;
-            player.DoubletSilenced = Apply(state.DoubletSilenced, set.DoubletSilenced, false, bodySilVol, decay) ?? player.DoubletSilenced;
+            // A global veto: a pack that says its levels are mixed keeps them either way.
+            bool autoLevel = profile.AutoLevel && (Plugin.AutoLevel == null || Plugin.AutoLevel.Value);
+
+            player.Body = Apply(state.Body, set.Body, loop, bodyVol, decay, autoLevel) ?? player.Body;
+            player.Tail = Apply(state.Tail, set.Tail, false, tailVol, decay, autoLevel) ?? player.Tail;
+            player.Doublet = Apply(state.Doublet, set.Doublet, false, bodyVol, decay, autoLevel) ?? player.Doublet;
+            player.BodySilenced = Apply(state.BodySilenced, set.BodySilenced, loop, bodySilVol, decay, autoLevel) ?? player.BodySilenced;
+            player.TailSilenced = Apply(state.TailSilenced, set.TailSilenced, false, tailSilVol, decay, autoLevel) ?? player.TailSilenced;
+            player.DoubletSilenced = Apply(state.DoubletSilenced, set.DoubletSilenced, false, bodySilVol, decay, autoLevel) ?? player.DoubletSilenced;
 
             RefreshFiringLoopLength(player);
 
-            Plugin.Log.LogInfo("Swapped " + templateId + " -> " + profile.Label + " (auto=" + loop + ")");
+            Plugin.Log.LogInfo("Swapped " + templateId + " -> " + profile.Label + " (auto=" + loop +
+                               ", autoLevel=" + autoLevel + ")");
 
             if (Plugin.Debug != null && Plugin.Debug.Value)
             {
@@ -144,18 +146,18 @@ namespace Resound.Audio
             }
         }
 
-        // No clips for this slot still means the volume applies: the vanilla bank is kept, but
-        // rescaled, so it stays balanced against the slots the set does replace.
+        // A kept vanilla bank is still rescaled so it stays balanced against the replaced slots.
         private static SoundBank Apply(SoundBank original, AudioClip[] clips, bool loop, float volume,
-            float decayBeats)
+            float decayBeats, bool autoLevel)
         {
             if (original == null)
                 return null;
 
+            // A kept vanilla bank is at vanilla level by definition.
             if (clips == null)
                 return BankFactory.Rescale(original, volume);
 
-            return BankFactory.Clone(original, clips, loop, volume, decayBeats);
+            return BankFactory.Clone(original, clips, loop, volume, decayBeats, autoLevel);
         }
     }
 }

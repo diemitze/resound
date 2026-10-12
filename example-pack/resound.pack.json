@@ -4,6 +4,7 @@
   "author": "you",
   "apiVersion": 1,
   "priority": 0,
+  "autoLevel": true,
 
   "entries": [
     {

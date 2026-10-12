@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
@@ -10,9 +10,26 @@ namespace Resound.Config
         [JsonProperty("name")]
         public string Name = "";
 
-        // EFT weapon template id. Turn on logWeaponIds and fire a gun to find it.
+        // EFT weapon template id. Turn on "Log weapon template ids" and fire a gun to find it.
         [JsonProperty("templateId")]
         public string TemplateId = "";
+
+        // Optional, ANDed with each other and templateId. One namePattern covers a whole family.
+        [JsonProperty("templateIds")]
+        public List<string> TemplateIds;
+
+        [JsonProperty("parentId")]
+        public string ParentId;
+
+        [JsonProperty("weapClass")]
+        public string WeapClass;
+
+        [JsonProperty("caliber")]
+        public string Caliber;
+
+        // Regex over the item's internal _name (e.g. "deagle" for every Desert Eagle).
+        [JsonProperty("namePattern")]
+        public string NamePattern;
 
         // Folder under sounds/ holding this weapon's replacement clips.
         [JsonProperty("soundSet")]
@@ -28,20 +45,20 @@ namespace Resound.Config
         [JsonProperty("tailVolume")]
         public float TailVolume = 1.0f;
 
-        // Suppressed banks, null meaning "same as unsuppressed". Worth setting when the source
-        // game normalises every sample to the same peak (BO2 does), because EFT's silenced bank
-        // volume is tuned for BSG's own much quieter suppressed recording.
+        // Null follows the unsuppressed value. BO2 peaks every sample alike, so its suppressed rips need turning down.
         [JsonProperty("bodySilencedVolume")]
         public float? BodySilencedVolume;
 
         [JsonProperty("tailSilencedVolume")]
         public float? TailSilencedVolume;
 
-        // How many beats of each shot survive in the full-auto loop, null meaning the default 4.
-        // A sample longer than this window gets cut short with a linear fade. Raising it keeps
-        // more of the sample but overlaps more copies, which past a point is mush not fidelity.
+        // Beats of each shot kept in the full-auto loop. Null fits it to the sample length.
         [JsonProperty("decayBeats")]
         public float? DecayBeats;
+
+        // The shipped sounds are mixed by hand, so this is off unless an entry asks for it.
+        [JsonProperty("autoLevel")]
+        public bool AutoLevel = false;
 
         // Scales BSG's per-event volume, which is not always 1.0 (the MP-155 ships 1.1 and 1.2).
         [JsonProperty("eventVolume")]

@@ -9,9 +9,7 @@ using SPT.Reflection.Patching;
 
 namespace Resound.Patches
 {
-    // Reload and foley clips are keyed by event-name strings that are serialized on the
-    // weapon prefabs, not present in Assembly-CSharp, so they cannot be enumerated offline.
-    // Reading them off a live sound player is the only way to learn a weapon's event keys.
+    // Event keys live on the prefabs, not in Assembly-CSharp, so a live player is the only place to read them.
     internal class SoundEventDumpPatch : ModulePatch
     {
         // The override calls base.Init first, so playersBridge is already set here.
